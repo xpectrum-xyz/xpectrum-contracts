@@ -1,0 +1,264 @@
+{
+  "contract": "Xlist",
+  "version": "v4.0.0",
+  "generated": "2026-10-30",
+  "chain": "octra mainnet",
+  "source_file": "contracts/launch/Xlist.aml",
+  "address": "octBnPAc1ckgGwXDDHGJcbAFtDb7ttorssqsz54epy5qiG9",
+  "size": 3392,
+  "certificate": {
+    "schema": "aml_bytecode_certificate_v1",
+    "compiler": "octra_aml",
+    "compiler_version": "1.0 Rehovot",
+    "verification_schema": "aml_safety_report_v1",
+    "source_mode": "single",
+    "source_hash": "920bbd02dbb53814fd3727d5d52831f6849dc8471ceff17ab992cba3f53a137a",
+    "bytecode_hash": "4a20afd1fd195a1ca6445c5162e23e6cab4ba6b7fc832af5271019e4afb96654",
+    "verification_hash": "905df3a89b9aef102d805a6daa1dbfbd64d67edffbab13cc1492e16d9ecdbfd5"
+  },
+  "verification": {
+    "schema": "aml_safety_report_v1",
+    "engine": "aml_ast_verifier",
+    "proof_model": "formal/coq/aml_value_safety_model.v",
+    "proof_gate": "scripts/check_aml_formal.sh",
+    "program_name": "Xlist",
+    "verified": true,
+    "safety": "safe",
+    "errors": 0,
+    "warnings": 0,
+    "trace": [
+      {
+        "code": "signed_value_storage",
+        "title": "value-like storage must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_parameter",
+        "title": "value-moving public parameters must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_flow",
+        "title": "signed values must not flow into value-like storage writes",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_arithmetic_range_not_proven",
+        "title": "unsigned arithmetic writes must prove range safety",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "supply_invariant_unproven",
+        "title": "balance and total supply writes should preserve conservation",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_parameter_without_positive_guard",
+        "title": "unsigned value parameters should reject zero unless zero is meaningful",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      },
+      {
+        "code": "unchecked_transfer_result",
+        "title": "native transfer result should be checked",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      }
+    ],
+    "function_summaries": [
+      {
+        "name": "_key",
+        "visibility": "private",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_mine",
+        "visibility": "private",
+        "direct_calls": [
+          "_key",
+          "call",
+          "to_int"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_write",
+        "visibility": "private",
+        "direct_calls": [
+          "_mine",
+          "len",
+          "mget",
+          "split",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "entry",
+          "size"
+        ],
+        "transitive_writes": [
+          "entry",
+          "size"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "add",
+        "visibility": "public",
+        "direct_calls": [
+          "_write"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "entry",
+          "size"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "remove",
+        "visibility": "public",
+        "direct_calls": [
+          "_write"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "entry",
+          "size"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_holder_list",
+        "visibility": "public",
+        "direct_calls": [
+          "_mine",
+          "assert_address",
+          "to_string"
+        ],
+        "direct_writes": [
+          "holder_of"
+        ],
+        "transitive_writes": [
+          "holder_of"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "freeze",
+        "visibility": "public",
+        "direct_calls": [
+          "_mine"
+        ],
+        "direct_writes": [
+          "frozen"
+        ],
+        "transitive_writes": [
+          "frozen"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "digest_of",
+        "visibility": "public",
+        "direct_calls": [
+          "_key",
+          "concat",
+          "sha256",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "is_member",
+        "visibility": "public",
+        "direct_calls": [
+          "_key",
+          "call",
+          "digest_of",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "is_holder_list",
+        "visibility": "public",
+        "direct_calls": [
+          "_key"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_list",
+        "visibility": "public",
+        "direct_calls": [
+          "_key",
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "constructor",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      }
+    ],
+    "invariants": [
+      {
+        "code": "supply_balance_conservation",
+        "kind": "derived",
+        "status": "not_applicable",
+        "expression": null,
+        "message": "program does not expose both balance and supply storage",
+        "fields": [],
+        "functions": []
+      }
+    ],
+    "findings": []
+  }
+}

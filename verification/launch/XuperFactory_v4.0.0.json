@@ -1,19 +1,20 @@
 {
   "contract": "XuperFactory",
-  "version": "v2.0.0",
-  "generated": "2026-09-04",
+  "version": "v4.0.0",
+  "generated": "2026-10-30",
   "chain": "octra mainnet",
-  "source_file": "contracts/XuperFactory.aml",
-  "size": 80766,
+  "source_file": "contracts/launch/XuperFactory.aml",
+  "address": "octCzmWDXWPFWzFhjPXF3rfdeecFPNYedAoRjUyBU4rx2nz",
+  "size": 40497,
   "certificate": {
     "schema": "aml_bytecode_certificate_v1",
     "compiler": "octra_aml",
     "compiler_version": "1.0 Rehovot",
     "verification_schema": "aml_safety_report_v1",
     "source_mode": "single",
-    "source_hash": "ef57abbfbf0b21d9ad8022c7e645d3f04bf5a8796ffc49787492e62e2a4698bc",
-    "bytecode_hash": "4fa02e39bd1c3f2e78f4dba2bb34a6882a3d910a2213e3f6af73c8a9d4228e6a",
-    "verification_hash": "41a85a72e2d63fc8bdb4e470515a24104b72b1c59a4c0d31f704916d07742c26"
+    "source_hash": "6063f534cc6491d324f280a61f3e551121484be3221057887f4daf128c045e06",
+    "bytecode_hash": "978a7ec740cb6726b4b57fdccaa62279a2f1fe26bef9eb637b9fcbbf137e1f8b",
+    "verification_hash": "42727fd726155641e213f534530213ec869a8dc1c2b90d1252a91c51c42ce494"
   },
   "verification": {
     "schema": "aml_safety_report_v1",
@@ -24,7 +25,7 @@
     "verified": true,
     "safety": "warning",
     "errors": 0,
-    "warnings": 1,
+    "warnings": 2,
     "trace": [
       {
         "code": "signed_value_storage",
@@ -66,7 +67,7 @@
         "title": "unsigned value parameters should reject zero unless zero is meaningful",
         "status": "warning",
         "severity": "warning",
-        "findings": 1
+        "findings": 2
       },
       {
         "code": "unchecked_transfer_result",
@@ -78,9 +79,20 @@
     ],
     "function_summaries": [
       {
-        "name": "only_owner",
+        "name": "_only_owner",
         "visibility": "private",
         "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_spawn",
+        "visibility": "private",
+        "direct_calls": [
+          "deploy"
+        ],
         "direct_writes": [],
         "transitive_writes": [],
         "value_writes": [],
@@ -90,74 +102,22 @@
         "name": "create_collection",
         "visibility": "public",
         "direct_calls": [
-          "assert_address",
-          "call",
-          "deploy",
-          "is_address",
+          "_spawn",
           "transfer"
         ],
         "direct_writes": [
+          "by_launcher",
+          "collection_of",
           "collections",
           "count",
-          "fee_balance",
-          "xlist_of",
-          "xlists"
+          "count_of"
         ],
         "transitive_writes": [
+          "by_launcher",
+          "collection_of",
           "collections",
           "count",
-          "fee_balance",
-          "xlist_of",
-          "xlists"
-        ],
-        "value_writes": [
-          "fee_balance"
-        ],
-        "signed_params": []
-      },
-      {
-        "name": "transfer_ownership",
-        "visibility": "public",
-        "direct_calls": [
-          "assert_address",
-          "only_owner"
-        ],
-        "direct_writes": [
-          "owner"
-        ],
-        "transitive_writes": [
-          "owner"
-        ],
-        "value_writes": [],
-        "signed_params": []
-      },
-      {
-        "name": "set_platform_wallet",
-        "visibility": "public",
-        "direct_calls": [
-          "assert_address",
-          "only_owner"
-        ],
-        "direct_writes": [
-          "platform_wallet"
-        ],
-        "transitive_writes": [
-          "platform_wallet"
-        ],
-        "value_writes": [],
-        "signed_params": []
-      },
-      {
-        "name": "set_launch_fee",
-        "visibility": "public",
-        "direct_calls": [
-          "only_owner"
-        ],
-        "direct_writes": [
-          "launch_fee"
-        ],
-        "transitive_writes": [
-          "launch_fee"
+          "count_of"
         ],
         "value_writes": [],
         "signed_params": []
@@ -168,32 +128,84 @@
         "direct_calls": [
           "transfer"
         ],
-        "direct_writes": [
-          "fee_balance"
-        ],
-        "transitive_writes": [
-          "fee_balance"
-        ],
-        "value_writes": [
-          "fee_balance"
-        ],
-        "signed_params": []
-      },
-      {
-        "name": "get_launch_fee",
-        "visibility": "public",
-        "direct_calls": [],
         "direct_writes": [],
         "transitive_writes": [],
         "value_writes": [],
         "signed_params": []
       },
       {
-        "name": "get_fee_balance",
+        "name": "set_launch_fee",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner"
+        ],
+        "direct_writes": [
+          "launch_fee"
+        ],
+        "transitive_writes": [
+          "launch_fee"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_platform",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "assert_address"
+        ],
+        "direct_writes": [
+          "platform"
+        ],
+        "transitive_writes": [
+          "platform"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_xlist",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "assert_address"
+        ],
+        "direct_writes": [
+          "xlist"
+        ],
+        "transitive_writes": [
+          "xlist"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "propose_ownership",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "assert_address"
+        ],
+        "direct_writes": [
+          "pending_owner"
+        ],
+        "transitive_writes": [
+          "pending_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "accept_ownership",
         "visibility": "public",
         "direct_calls": [],
-        "direct_writes": [],
-        "transitive_writes": [],
+        "direct_writes": [
+          "owner"
+        ],
+        "transitive_writes": [
+          "owner"
+        ],
         "value_writes": [],
         "signed_params": []
       },
@@ -207,43 +219,19 @@
         "signed_params": []
       },
       {
-        "name": "get_xlist",
+        "name": "collection_by_creator",
         "visibility": "public",
-        "direct_calls": [],
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
         "direct_writes": [],
         "transitive_writes": [],
         "value_writes": [],
         "signed_params": []
       },
       {
-        "name": "get_xlist_for_collection",
-        "visibility": "public",
-        "direct_calls": [],
-        "direct_writes": [],
-        "transitive_writes": [],
-        "value_writes": [],
-        "signed_params": []
-      },
-      {
-        "name": "get_count",
-        "visibility": "public",
-        "direct_calls": [],
-        "direct_writes": [],
-        "transitive_writes": [],
-        "value_writes": [],
-        "signed_params": []
-      },
-      {
-        "name": "get_owner",
-        "visibility": "public",
-        "direct_calls": [],
-        "direct_writes": [],
-        "transitive_writes": [],
-        "value_writes": [],
-        "signed_params": []
-      },
-      {
-        "name": "get_platform_wallet",
+        "name": "collection_by_launcher",
         "visibility": "public",
         "direct_calls": [],
         "direct_writes": [],
@@ -254,24 +242,26 @@
       {
         "name": "constructor",
         "visibility": "public",
-        "direct_calls": [],
+        "direct_calls": [
+          "assert_address"
+        ],
         "direct_writes": [
-          "count",
-          "fee_balance",
           "launch_fee",
           "owner",
-          "platform_wallet"
+          "pending_owner",
+          "platform",
+          "xlist",
+          "xpectra"
         ],
         "transitive_writes": [
-          "count",
-          "fee_balance",
           "launch_fee",
           "owner",
-          "platform_wallet"
+          "pending_owner",
+          "platform",
+          "xlist",
+          "xpectra"
         ],
-        "value_writes": [
-          "fee_balance"
-        ],
+        "value_writes": [],
         "signed_params": []
       }
     ],
@@ -282,9 +272,7 @@
         "status": "not_applicable",
         "expression": null,
         "message": "program does not expose both balance and supply storage",
-        "fields": [
-          "fee_balance"
-        ],
+        "fields": [],
         "functions": []
       }
     ],
@@ -294,11 +282,19 @@
         "code": "unsigned_parameter_without_positive_guard",
         "message": "unsigned value parameter allows zero unless guarded",
         "program_name": "XuperFactory",
+        "function_name": "create_collection",
+        "state_field": null,
+        "parameter": "max_supply"
+      },
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "XuperFactory",
         "function_name": "set_launch_fee",
         "state_field": null,
-        "parameter": "new_fee"
+        "parameter": "fee"
       }
     ]
-  },
-  "abi": "{\"functions\":[{\"name\":\"create_collection\",\"inputs\":[\"string\",\"string\",\"string\",\"bytes\",\"bytes\",\"bytes\",\"address\",\"address\",\"bytes\",\"bytes\",\"bytes\"],\"output\":\"address\",\"view\":false,\"payable\":false},{\"name\":\"transfer_ownership\",\"inputs\":[\"address\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"set_platform_wallet\",\"inputs\":[\"address\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"set_launch_fee\",\"inputs\":[\"bytes\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"withdraw\",\"inputs\":[],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"get_launch_fee\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"get_fee_balance\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"get_collection\",\"inputs\":[\"bytes\"],\"output\":\"address\",\"view\":true,\"payable\":false},{\"name\":\"get_xlist\",\"inputs\":[\"bytes\"],\"output\":\"address\",\"view\":true,\"payable\":false},{\"name\":\"get_xlist_for_collection\",\"inputs\":[\"address\"],\"output\":\"address\",\"view\":true,\"payable\":false},{\"name\":\"get_count\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"get_owner\",\"inputs\":[],\"output\":\"address\",\"view\":true,\"payable\":false},{\"name\":\"get_platform_wallet\",\"inputs\":[],\"output\":\"address\",\"view\":true,\"payable\":false}],\"events\":[]}"
+  }
 }

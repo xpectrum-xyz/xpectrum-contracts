@@ -1,0 +1,378 @@
+// SPDX-License-Identifier: FSL-1.1-MIT
+
+//| Xdutch
+//| Descending-price auctions for single NFTs.
+//|
+//| model    the price falls by a fixed step each epoch from start to floor, and the first buyer at the current price takes the token
+//| custody  the token is held by this contract from listing until it is bought or reclaimed
+//| payout   proceeds and royalties are credited here and withdrawn with claim_proceeds
+//| privacy  only the buyer sends a transaction, so a bidder who walks away leaves no record
+//| units    amounts in micro-OCT (1 OCT = 1,000,000), time in epochs
+//| version  2.0.0
+//| license  FSL-1.1-MIT, MIT from 2028-10-02
+
+contract Xdutch {
+
+  const MARKETPLACE_FEE_BPS: u128 = 250
+  const MAX_ROYALTY_BPS:     u128 = 1000
+  const MAX_ALLOW_BATCH:     u128 = 100
+  const MAX_DURATION:        u128 = 518400
+  const MAX_PRICE:           u128 = 1000000000000000000000000
+
+  state {
+    owner:        address
+    sale_count:   u128
+    fee_balance:  u128
+    total_volume: u128
+
+    pending: map[string]u128
+
+    s_seller:   map[u128]address
+    s_contract: map[u128]address
+    s_token:    map[u128]u128
+    s_start:    map[u128]u128
+    s_floor:    map[u128]u128
+    s_step:     map[u128]u128
+    s_open_at:  map[u128]u128
+    s_end_at:   map[u128]u128
+    // 1 live, 2 sold, 3 reclaimed
+    s_status:   map[u128]u128
+    s_held:     map[u128]u128
+    s_buyer:    map[u128]address
+    s_price:    map[u128]u128
+
+    // 0 open, 1 allowlist only
+    s_gated:      map[u128]u128
+    s_gate_salt:  map[u128]string
+    s_allow_size: map[u128]u128
+    s_allow:      map[u128]map[string]u128
+  }
+
+  //| Written when a token is listed.
+  event Listed(sale_id: u128, seller: address, nft: address, token_id: u128, start: u128, floor: u128)
+  //| Written when a sale completes.
+  event Bought(sale_id: u128, buyer: address, price: u128, at_epoch: u128)
+  //| Written when an unsold token is reclaimed.
+  event Expired(sale_id: u128)
+
+  constructor() { self.owner = caller  self.sale_count = 0 }
+
+  private fn _credit(who: string, amount: u128) {
+    let n: u128 = self.pending[who] + amount
+    require(n >= self.pending[who], "xdutch: overflow")
+    self.pending[who] = n
+  }
+
+  private fn _gate_digest(sale_id: u128, who: address): string {
+    let pre: string = concat("xdutch-gate|", self.s_gate_salt[sale_id])
+    pre = concat(pre, "|")
+    pre = concat(pre, to_string(who))
+    return sha256(pre)
+  }
+
+  //| Allowlist digest of an address for a sale, sha256("xdutch-gate|" + salt + "|" + address).
+  //| in       sale_id  the sale
+  //| in       who      the address
+  //| out      hex digest
+  view fn preview_gate_digest(sale_id: u128, who: address): string {
+    return _gate_digest(sale_id, who)
+  }
+
+  //| Price of a sale at a given epoch.
+  //| in       sale_id   the sale
+  //| in       at_epoch  the epoch
+  //| out      price, never below the floor
+  view fn price_at(sale_id: u128, at_epoch: u128): u128 {
+    let start: u128 = self.s_start[sale_id]
+    let floor: u128 = self.s_floor[sale_id]
+    let open:  u128 = self.s_open_at[sale_id]
+    if floor >= start { return floor }
+    if at_epoch <= open { return start }
+    let elapsed: u128 = at_epoch - open
+    let drop: u128 = elapsed * self.s_step[sale_id]
+    let span: u128 = start - floor
+    if drop >= span { return floor }
+    return start - drop
+  }
+
+  //| Price of a sale at the current epoch.
+  //| in       sale_id  the sale
+  //| out      price
+  view fn current_price(sale_id: u128): u128 {
+    return price_at(sale_id, epoch)
+  }
+
+  //| Lists a token and takes it into escrow.
+  //| who      the token's owner, who has approved this contract for it
+  //| holds    the token moves into this contract
+  //| reveals  the seller, the token and every sale term
+  //| logs     Listed(sale_id, seller, nft, token_id, start, floor)
+  //| in       nft       collection address
+  //| in       token_id  token
+  //| in       start     opening price
+  //| in       floor     lowest price
+  //| in       step      price decrease per epoch
+  //| in       duration  length in epochs
+  //| in       gated     1 for allowlisted buyers only, which refuses everyone until add_allow loads the list
+  //| out      sale id
+  fn open_sale(nft: address, token_id: u128, start: u128, floor: u128, step: u128, duration: u128, gated: u128): u128 {
+    require(start > floor, "xdutch: start must exceed floor")
+    require(start <= MAX_PRICE, "xdutch: start price too large")
+    require(floor > 0, "xdutch: floor must be positive")
+    require(step > 0, "xdutch: step must be positive")
+    require(step <= start - floor, "xdutch: step exceeds the whole drop")
+    require(duration > 0 && duration <= MAX_DURATION, "xdutch: bad duration")
+    require(gated <= 1, "xdutch: gate flag must be 0 or 1")
+    let cur: string = call(nft, "owner_of", token_id)
+    require(to_string(caller) == cur, "xdutch: not token owner")
+    let approved: string = call(nft, "is_approved_or_owner", token_id, self_addr)
+    require(to_int(approved) == 1, "xdutch: approve this contract for the token first")
+
+    let id: u128 = self.sale_count
+    self.sale_count += 1
+    self.s_seller[id]   = caller
+    self.s_contract[id] = nft
+    self.s_token[id]    = token_id
+    self.s_start[id]    = start
+    self.s_floor[id]    = floor
+    self.s_step[id]     = step
+    self.s_open_at[id]  = epoch
+    self.s_end_at[id]   = epoch + duration
+
+    let probe_creator: string = call(nft, "creator_of", token_id)
+    let probe_royalty: string = call(nft, "royalty_of", token_id)
+    require(len(probe_creator) > 0, "xdutch: this collection has no creator_of")
+    require(len(probe_royalty) > 0, "xdutch: this collection has no royalty_of")
+
+    call(nft, "transfer_from", caller, self_addr, token_id)
+    let held: string = call(nft, "owner_of", token_id)
+    require(to_string(self_addr) == held, "xdutch: escrow failed")
+    self.s_held[id] = 1
+    self.s_status[id] = 1
+    self.s_gated[id]  = gated
+
+    emit Listed(id, caller, nft, token_id, start, floor)
+    return id
+  }
+
+  //| Adds allowlist entries to a sale.
+  //| who      the seller
+  //| reveals  the digests and their count, not the addresses
+  //| in       sale_id  the sale
+  //| in       salt     salt the digests were made with, fixed by the first batch
+  //| in       digests  comma-separated hex digests, at most 100
+  //| out      true
+  fn add_allow(sale_id: u128, salt: string, digests: string): bool {
+    require(sale_id < self.sale_count, "xdutch: bad sale")
+    require(caller == self.s_seller[sale_id], "xdutch: not the seller")
+    require(self.s_status[sale_id] == 1, "xdutch: not live")
+    require(len(salt) > 0, "xdutch: gate needs a salt")
+
+    if self.s_allow_size[sale_id] == 0 {
+      self.s_gate_salt[sale_id] = salt
+    } else {
+      require(salt == self.s_gate_salt[sale_id], "xdutch: salt does not match this allowlist")
+    }
+
+    let n: u128 = to_int(to_string(split(digests, ",")))
+    require(n > 0 && n <= MAX_ALLOW_BATCH, "xdutch: bad allowlist batch")
+    for i in 0..n {
+      let h: string = to_string(mget(100 + i))
+      require(len(h) == 64, "xdutch: bad digest")
+      if self.s_allow[sale_id][h] == 0 {
+        self.s_allow[sale_id][h] = 1
+        self.s_allow_size[sale_id] += 1
+      }
+    }
+    return true
+  }
+
+  //| Turns a sale's allowlist on or off.
+  //| who      the seller
+  //| in       sale_id  the sale
+  //| in       on       1 for allowlist only, 0 for open
+  //| out      true
+  fn set_gate(sale_id: u128, on: u128): bool {
+    require(sale_id < self.sale_count, "xdutch: bad sale")
+    require(caller == self.s_seller[sale_id], "xdutch: not the seller")
+    require(self.s_status[sale_id] == 1, "xdutch: not live")
+    require(on <= 1, "xdutch: gate flag must be 0 or 1")
+    if on == 1 {
+      require(self.s_allow_size[sale_id] > 0, "xdutch: allowlist is empty")
+    }
+    self.s_gated[sale_id] = on
+    return true
+  }
+
+  //| Whether an address may buy from a sale.
+  //| in       sale_id  the sale
+  //| in       who      the address
+  //| out      1 or 0
+  view fn is_allowed(sale_id: u128, who: address): u128 {
+    if self.s_gated[sale_id] == 0 { return 1 }
+    let h: string = _gate_digest(sale_id, who)
+    return self.s_allow[sale_id][h]
+  }
+
+  //| Allowlist settings of a sale.
+  //| in       sale_id  the sale
+  //| out      gated|entries|salt
+  view fn get_gate(sale_id: u128): string {
+    let s = concat(to_string(self.s_gated[sale_id]), "|")
+    s = concat(s, to_string(self.s_allow_size[sale_id]))
+    s = concat(s, "|")
+    s = concat(s, self.s_gate_salt[sale_id])
+    return s
+  }
+
+  //| Buys the token at the current price.
+  //| who      anyone but the seller, and only allowlisted addresses when the sale is gated
+  //| pays     at least the price at the epoch the call executes; any excess is returned
+  //| when     until the sale's end epoch
+  //| holds    the token moves to the buyer
+  //| reveals  the buyer and the price
+  //| logs     Bought(sale_id, buyer, price, epoch)
+  //| in       sale_id  the sale
+  //| out      true
+  fn buy(sale_id: u128): bool {
+    require(sale_id < self.sale_count, "xdutch: bad sale")
+    require(self.s_status[sale_id] == 1, "xdutch: not live")
+    require(epoch <= self.s_end_at[sale_id], "xdutch: expired")
+    require(caller != self.s_seller[sale_id], "xdutch: seller cannot buy")
+    if self.s_gated[sale_id] == 1 {
+      let gate: string = _gate_digest(sale_id, caller)
+      require(self.s_allow[sale_id][gate] == 1, "xdutch: not on the allowlist")
+    }
+    let price: u128 = price_at(sale_id, epoch)
+    require(value >= price, "xdutch: underpaid")
+
+    self.s_status[sale_id] = 2
+    self.s_buyer[sale_id] = caller
+    self.s_price[sale_id] = price
+
+    let nft: address = self.s_contract[sale_id]
+    let tok: u128 = self.s_token[sale_id]
+    let creator: string = call(nft, "creator_of", tok)
+    let roy_raw: string = call(nft, "royalty_of", tok)
+    let roy_bps: u128 = to_int(roy_raw)
+    if roy_bps > MAX_ROYALTY_BPS { roy_bps = MAX_ROYALTY_BPS }
+    let fee: u128 = price * MARKETPLACE_FEE_BPS / 10000
+    let royalty: u128 = price * roy_bps / 10000
+    require(fee + royalty <= price, "xdutch: fee+royalty exceed price")
+
+    _credit(to_string(self.s_seller[sale_id]), price - fee - royalty)
+    _credit(creator, royalty)
+    let nfb: u128 = self.fee_balance + fee
+    require(nfb >= self.fee_balance, "xdutch: fee overflow")
+    self.fee_balance = nfb
+    let ntv: u128 = self.total_volume + price
+    require(ntv >= self.total_volume, "xdutch: volume overflow")
+    self.total_volume = ntv
+
+    require(self.s_held[sale_id] == 1, "xdutch: asset not held")
+    self.s_held[sale_id] = 0
+    call(nft, "transfer_from", self_addr, caller, tok)
+    let now_owner: string = call(nft, "owner_of", tok)
+    require(to_string(caller) == now_owner, "xdutch: delivery failed")
+
+    if value > price {
+      let ok: bool = transfer(caller, value - price)
+      require(ok, "xdutch: change failed")
+    }
+
+    emit Bought(sale_id, caller, price, epoch)
+    return true
+  }
+
+  //| Returns an unsold token to its seller.
+  //| who      the seller
+  //| when     after the sale's end epoch
+  //| holds    the token moves back to the seller
+  //| reveals  that the sale ended unsold
+  //| logs     Expired(sale_id)
+  //| in       sale_id  the sale
+  //| out      true
+  fn reclaim(sale_id: u128): bool {
+    require(sale_id < self.sale_count, "xdutch: bad sale")
+    require(caller == self.s_seller[sale_id], "xdutch: not the seller")
+    require(self.s_status[sale_id] == 1, "xdutch: not live")
+    require(epoch > self.s_end_at[sale_id], "xdutch: still live")
+    self.s_status[sale_id] = 3
+    require(self.s_held[sale_id] == 1, "xdutch: asset not held")
+    self.s_held[sale_id] = 0
+    let nft: address = self.s_contract[sale_id]
+    call(nft, "transfer_from", self_addr, caller, self.s_token[sale_id])
+    let back: string = call(nft, "owner_of", self.s_token[sale_id])
+    require(to_string(caller) == back, "xdutch: return failed")
+    emit Expired(sale_id)
+    return true
+  }
+
+  //| Withdraws the caller's credited proceeds and royalties.
+  //| who      any address with a credit
+  //| pays     the full credit to the caller
+  //| reveals  the amount withdrawn
+  //| out      true
+  fn claim_proceeds(): bool {
+    let amount: u128 = self.pending[to_string(caller)]
+    require(amount > 0, "xdutch: nothing to claim")
+    self.pending[to_string(caller)] = 0
+    let ok: bool = transfer(caller, amount)
+    require(ok, "xdutch: payout failed")
+    return true
+  }
+
+  //| Withdraws the accrued marketplace fees.
+  //| who      the contract owner
+  //| pays     the fee balance to the recipient
+  //| in       to  recipient
+  //| out      true
+  fn withdraw_fees(to: address): bool {
+    require(caller == self.owner, "xdutch: not owner")
+    let amount: u128 = self.fee_balance
+    require(amount > 0, "xdutch: no fees")
+    self.fee_balance = 0
+    let ok: bool = transfer(to, amount)
+    require(ok, "xdutch: withdraw failed")
+    return true
+  }
+
+  //| Credit an address can withdraw.
+  //| in       who  the address
+  //| out      amount
+  view fn get_proceeds(who: address): u128 {
+    return self.pending[to_string(who)]
+  }
+
+  //| Major version.
+  //| out      2
+  view fn get_version(): u128 {
+    return 2
+  }
+
+  //| Contract totals.
+  //| out      sale_count|fee_balance|total_volume
+  view fn get_stats(): string {
+    let s: string = concat(to_string(self.sale_count), "|")
+    s = concat(s, concat(to_string(self.fee_balance), "|"))
+    return concat(s, to_string(self.total_volume))
+  }
+
+  //| Terms and state of a sale. status is 1 live, 2 sold, 3 reclaimed.
+  //| in       sale_id  the sale
+  //| out      status|seller|nft|token_id|start|floor|step|open_epoch|end_epoch|held|buyer|price
+  view fn get_sale(sale_id: u128): string {
+    let s: string = concat(to_string(self.s_status[sale_id]), "|")
+    s = concat(s, concat(to_string(self.s_seller[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_contract[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_token[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_start[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_floor[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_step[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_open_at[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_end_at[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_held[sale_id]), "|"))
+    s = concat(s, concat(to_string(self.s_buyer[sale_id]), "|"))
+    return concat(s, to_string(self.s_price[sale_id]))
+  }
+}

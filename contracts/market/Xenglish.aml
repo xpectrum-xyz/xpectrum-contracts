@@ -1,0 +1,468 @@
+// SPDX-License-Identifier: FSL-1.1-MIT
+
+//| Xenglish
+//| Ascending-price auctions for single NFTs with public bids.
+//|
+//| model    each bid must beat the top bid by at least inc_bps, and a bid in the last EXTEND_EPOCHS moves the close to EXTEND_EPOCHS after it
+//| custody  the token is held by this contract from creation until settlement or cancellation, and the top bid is held here in full
+//| payout   an outbid bid is credited to its bidder, who can withdraw it or bid it again; proceeds and royalties are credited and withdrawn with claim_proceeds
+//| privacy  none by design: every bidder and every amount is public
+//| units    amounts in micro-OCT (1 OCT = 1,000,000), time in epochs
+//| version  1.0.0
+//| license  FSL-1.1-MIT, MIT from 2028-10-02
+
+contract Xenglish {
+
+  const MARKETPLACE_FEE_BPS: u128 = 250
+  const MAX_ROYALTY_BPS:     u128 = 1000
+  const MIN_INCREMENT_BPS:   u128 = 100
+  const MAX_INCREMENT_BPS:   u128 = 5000
+  // about five minutes at the mainnet epoch rate
+  const EXTEND_EPOCHS:       u128 = 30
+  const MAX_DURATION:        u128 = 518400
+  const MAX_PRICE:           u128 = 1000000000000000000000000
+  const MAX_ALLOW_BATCH:     u128 = 100
+
+  state {
+    owner:         address
+    auction_count: u128
+    fee_balance:   u128
+    escrowed:      u128
+    total_volume:  u128
+
+    pending: map[string]u128
+
+    a_seller:    map[u128]address
+    a_contract:  map[u128]address
+    a_token:     map[u128]u128
+    a_start:     map[u128]u128
+    a_inc_bps:   map[u128]u128
+    a_open_at:   map[u128]u128
+    a_end_at:    map[u128]u128
+    // 1 live, 2 sold, 3 unsold, 4 cancelled
+    a_status:    map[u128]u128
+    a_held:      map[u128]u128
+    a_top:       map[u128]u128
+    a_top_by:    map[u128]address
+    a_bids:      map[u128]u128
+
+    // 0 open, 1 allowlist only
+    a_gated:      map[u128]u128
+    a_gate_salt:  map[u128]string
+    a_allow_size: map[u128]u128
+    a_allow:      map[u128]map[string]u128
+
+    event_log:       map[u128]string
+    event_log_count: u128
+  }
+
+  constructor() { self.owner = caller  self.auction_count = 0 }
+
+  private fn _log(entry: string) {
+    self.event_log[self.event_log_count] = entry
+    self.event_log_count += 1
+  }
+
+  private fn _credit(who: string, amount: u128) {
+    let n: u128 = self.pending[who] + amount
+    require(n >= self.pending[who], "xenglish: overflow")
+    self.pending[who] = n
+  }
+
+  private fn _gate_digest(auction_id: u128, who: address): string {
+    let pre: string = concat("xenglish-gate|", self.a_gate_salt[auction_id])
+    pre = concat(pre, "|")
+    pre = concat(pre, to_string(who))
+    return sha256(pre)
+  }
+
+  //| Allowlist digest of an address for an auction, sha256("xenglish-gate|" + salt + "|" + address).
+  //| in       auction_id  the auction
+  //| in       who         the address
+  //| out      hex digest
+  view fn preview_gate_digest(auction_id: u128, who: address): string {
+    return _gate_digest(auction_id, who)
+  }
+
+  private fn _send_asset(auction_id: u128, to: address) {
+    require(self.a_held[auction_id] == 1, "xenglish: asset not held")
+    self.a_held[auction_id] = 0
+    let nft: address = self.a_contract[auction_id]
+    let tok: u128 = self.a_token[auction_id]
+    call(nft, "transfer_from", self_addr, to, tok)
+    let now_owner: string = call(nft, "owner_of", tok)
+    require(to_string(to) == now_owner, "xenglish: transfer failed")
+  }
+
+  //| Smallest bid the auction accepts now: the start before the first bid, then the top bid raised by inc_bps and by at least 1.
+  //| in       auction_id  the auction
+  //| out      amount
+  view fn min_next_bid(auction_id: u128): u128 {
+    if self.a_bids[auction_id] == 0 { return self.a_start[auction_id] }
+    let top: u128 = self.a_top[auction_id]
+    let step: u128 = top * self.a_inc_bps[auction_id] / 10000
+    if step == 0 { step = 1 }
+    return top + step
+  }
+
+  //| Creates an auction and takes the token into escrow.
+  //| who      the token's owner, who has approved this contract for it
+  //| holds    the token moves into this contract
+  //| reveals  the seller, the token and every auction term
+  //| logs     ecreate|id|seller|nft|token_id|start|inc_bps|end_epoch|epoch
+  //| in       nft         collection address
+  //| in       token_id    token
+  //| in       start       minimum first bid
+  //| in       inc_bps     minimum raise over the top bid in basis points, 100 to 5000
+  //| in       duration    length in epochs
+  //| in       gated       1 for allowlisted bidders only, which refuses every bid until add_allow loads the list
+  //| out      auction id
+  fn create_auction(nft: address, token_id: u128, start: u128, inc_bps: u128, duration: u128, gated: u128): u128 {
+    require(start > 0, "xenglish: starting price must be positive")
+    require(start <= MAX_PRICE, "xenglish: starting price too large")
+    require(inc_bps >= MIN_INCREMENT_BPS && inc_bps <= MAX_INCREMENT_BPS, "xenglish: bad increment")
+    require(duration > 0 && duration <= MAX_DURATION, "xenglish: bad duration")
+    require(gated <= 1, "xenglish: gate flag must be 0 or 1")
+    let cur: string = call(nft, "owner_of", token_id)
+    require(to_string(caller) == cur, "xenglish: not token owner")
+    let approved: string = call(nft, "is_approved_or_owner", token_id, self_addr)
+    require(to_int(approved) == 1, "xenglish: approve this contract for the token first")
+
+    let probe_creator: string = call(nft, "creator_of", token_id)
+    let probe_royalty: string = call(nft, "royalty_of", token_id)
+    require(len(probe_creator) > 0, "xenglish: this collection has no creator_of")
+    require(len(probe_royalty) > 0, "xenglish: this collection has no royalty_of")
+
+    let id: u128 = self.auction_count
+    self.auction_count += 1
+    self.a_seller[id]   = caller
+    self.a_contract[id] = nft
+    self.a_token[id]    = token_id
+    self.a_start[id]    = start
+    self.a_inc_bps[id]  = inc_bps
+    self.a_open_at[id]  = epoch
+    self.a_end_at[id]   = epoch + duration
+    self.a_gated[id]    = gated
+
+    call(nft, "transfer_from", caller, self_addr, token_id)
+    let held: string = call(nft, "owner_of", token_id)
+    require(to_string(self_addr) == held, "xenglish: escrow failed")
+    self.a_held[id] = 1
+    self.a_status[id] = 1
+
+    let entry = concat("ecreate|", to_string(id))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(caller))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(nft))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(token_id))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(start))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(inc_bps))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(self.a_end_at[id]))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(epoch))
+    _log(entry)
+    return id
+  }
+
+  //| Adds allowlist entries to an auction.
+  //| who      the seller
+  //| reveals  the digests and their count, not the addresses
+  //| in       auction_id  the auction
+  //| in       salt        salt the digests were made with, fixed by the first batch
+  //| in       digests     comma-separated hex digests, at most 100
+  //| out      true
+  fn add_allow(auction_id: u128, salt: string, digests: string): bool {
+    require(auction_id < self.auction_count, "xenglish: bad auction")
+    require(caller == self.a_seller[auction_id], "xenglish: not the seller")
+    require(self.a_status[auction_id] == 1, "xenglish: not live")
+    require(len(salt) > 0, "xenglish: gate needs a salt")
+
+    if self.a_allow_size[auction_id] == 0 {
+      self.a_gate_salt[auction_id] = salt
+    } else {
+      require(salt == self.a_gate_salt[auction_id], "xenglish: salt does not match this allowlist")
+    }
+
+    let n: u128 = to_int(to_string(split(digests, ",")))
+    require(n > 0 && n <= MAX_ALLOW_BATCH, "xenglish: bad allowlist batch")
+    for i in 0..n {
+      let h: string = to_string(mget(100 + i))
+      require(len(h) == 64, "xenglish: bad digest")
+      if self.a_allow[auction_id][h] == 0 {
+        self.a_allow[auction_id][h] = 1
+        self.a_allow_size[auction_id] += 1
+      }
+    }
+    return true
+  }
+
+  //| Turns an auction's allowlist on or off.
+  //| who      the seller
+  //| when     before the first bid
+  //| in       auction_id  the auction
+  //| in       on          1 for allowlist only, 0 for open
+  //| out      true
+  fn set_gate(auction_id: u128, on: u128): bool {
+    require(auction_id < self.auction_count, "xenglish: bad auction")
+    require(caller == self.a_seller[auction_id], "xenglish: not the seller")
+    require(self.a_status[auction_id] == 1, "xenglish: not live")
+    require(self.a_bids[auction_id] == 0, "xenglish: auction already has bids")
+    require(on <= 1, "xenglish: gate flag must be 0 or 1")
+    if on == 1 {
+      require(self.a_allow_size[auction_id] > 0, "xenglish: allowlist is empty")
+    }
+    self.a_gated[auction_id] = on
+    return true
+  }
+
+  //| Whether an address may bid on an auction.
+  //| in       auction_id  the auction
+  //| in       who         the address
+  //| out      1 or 0
+  view fn is_allowed(auction_id: u128, who: address): u128 {
+    if self.a_gated[auction_id] == 0 { return 1 }
+    let h: string = _gate_digest(auction_id, who)
+    return self.a_allow[auction_id][h]
+  }
+
+  //| Allowlist settings of an auction.
+  //| in       auction_id  the auction
+  //| out      gated|entries|salt
+  view fn get_gate(auction_id: u128): string {
+    let s = concat(to_string(self.a_gated[auction_id]), "|")
+    s = concat(s, to_string(self.a_allow_size[auction_id]))
+    s = concat(s, "|")
+    s = concat(s, self.a_gate_salt[auction_id])
+    return s
+  }
+
+  //| Places a bid.
+  //| who      anyone but the seller and the current top bidder, and only allowlisted addresses when the auction is gated
+  //| pays     up to amount attached, with any shortfall taken from the caller's credit; the previous top bid is credited to its bidder
+  //| when     until the close epoch
+  //| reveals  the bidder and the amount
+  //| logs     ebid|id|bidder|amount|end_epoch|epoch
+  //| in       auction_id  the auction
+  //| in       amount      the bid, at least min_next_bid
+  //| out      true
+  fn bid(auction_id: u128, amount: u128): bool {
+    require(auction_id < self.auction_count, "xenglish: bad auction")
+    require(self.a_status[auction_id] == 1, "xenglish: not live")
+    require(epoch <= self.a_end_at[auction_id], "xenglish: bidding has closed")
+    require(caller != self.a_seller[auction_id], "xenglish: seller cannot bid")
+    if self.a_gated[auction_id] == 1 {
+      let gate: string = _gate_digest(auction_id, caller)
+      require(self.a_allow[auction_id][gate] == 1, "xenglish: not on the allowlist")
+    }
+    require(amount <= MAX_PRICE, "xenglish: bid too large")
+    require(amount >= min_next_bid(auction_id), "xenglish: bid below the minimum")
+    let had_bids: u128 = self.a_bids[auction_id]
+    if had_bids > 0 {
+      require(caller != self.a_top_by[auction_id], "xenglish: already the top bid")
+    }
+    require(value <= amount, "xenglish: attached more than the bid")
+
+    let who: string = to_string(caller)
+    let short: u128 = amount - value
+    if short > 0 {
+      require(self.pending[who] >= short, "xenglish: not enough attached or in credit")
+      self.pending[who] -= short
+    }
+
+    if had_bids > 0 {
+      let prev: u128 = self.a_top[auction_id]
+      require(self.escrowed >= prev, "xenglish: escrow underflow")
+      self.escrowed -= prev
+      _credit(to_string(self.a_top_by[auction_id]), prev)
+    }
+    let ne: u128 = self.escrowed + amount
+    require(ne >= self.escrowed, "xenglish: escrow overflow")
+    self.escrowed = ne
+    self.a_top[auction_id] = amount
+    self.a_top_by[auction_id] = caller
+    self.a_bids[auction_id] = had_bids + 1
+
+    if self.a_end_at[auction_id] < epoch + EXTEND_EPOCHS {
+      self.a_end_at[auction_id] = epoch + EXTEND_EPOCHS
+    }
+
+    let entry = concat("ebid|", to_string(auction_id))
+    entry = concat(entry, "|")
+    entry = concat(entry, who)
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(amount))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(self.a_end_at[auction_id]))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(epoch))
+    _log(entry)
+    return true
+  }
+
+  //| Cancels an auction that has no bids.
+  //| who      the seller
+  //| holds    the token moves back to the seller
+  //| reveals  that the auction was cancelled
+  //| logs     ecancel|id
+  //| in       auction_id  the auction
+  //| out      true
+  fn cancel_auction(auction_id: u128): bool {
+    require(auction_id < self.auction_count, "xenglish: bad auction")
+    require(caller == self.a_seller[auction_id], "xenglish: not the seller")
+    require(self.a_status[auction_id] == 1, "xenglish: not live")
+    require(self.a_bids[auction_id] == 0, "xenglish: auction already has bids")
+    self.a_status[auction_id] = 4
+    _send_asset(auction_id, caller)
+    _log(concat("ecancel|", to_string(auction_id)))
+    return true
+  }
+
+  //| Settles an auction after its close.
+  //| who      anyone
+  //| when     after the close epoch
+  //| pays     the top bid is credited to the seller, the creator and the fee
+  //| holds    the token moves to the top bidder, or back to the seller when nobody bid
+  //| reveals  the winner and the price
+  //| logs     esettle|id|winner|seller|nft|token_id|price|epoch, or eunsold|id
+  //| in       auction_id  the auction
+  //| out      true
+  fn settle(auction_id: u128): bool {
+    require(auction_id < self.auction_count, "xenglish: bad auction")
+    require(self.a_status[auction_id] == 1, "xenglish: not live")
+    require(epoch > self.a_end_at[auction_id], "xenglish: bidding still open")
+    let seller: address = self.a_seller[auction_id]
+
+    if self.a_bids[auction_id] == 0 {
+      self.a_status[auction_id] = 3
+      _send_asset(auction_id, seller)
+      _log(concat("eunsold|", to_string(auction_id)))
+      return true
+    }
+
+    let price: u128 = self.a_top[auction_id]
+    let winner: address = self.a_top_by[auction_id]
+    let nft: address = self.a_contract[auction_id]
+    let tok: u128 = self.a_token[auction_id]
+    self.a_status[auction_id] = 2
+
+    let creator: string = call(nft, "creator_of", tok)
+    let roy_raw: string = call(nft, "royalty_of", tok)
+    let roy_bps: u128 = to_int(roy_raw)
+    if roy_bps > MAX_ROYALTY_BPS { roy_bps = MAX_ROYALTY_BPS }
+    let fee: u128 = price * MARKETPLACE_FEE_BPS / 10000
+    let royalty: u128 = price * roy_bps / 10000
+    require(fee + royalty <= price, "xenglish: fee+royalty exceed price")
+
+    require(self.escrowed >= price, "xenglish: escrow underflow")
+    self.escrowed -= price
+    _credit(to_string(seller), price - fee - royalty)
+    _credit(creator, royalty)
+    let nfb: u128 = self.fee_balance + fee
+    require(nfb >= self.fee_balance, "xenglish: fee overflow")
+    self.fee_balance = nfb
+    let ntv: u128 = self.total_volume + price
+    require(ntv >= self.total_volume, "xenglish: volume overflow")
+    self.total_volume = ntv
+
+    _send_asset(auction_id, winner)
+
+    let entry = concat("esettle|", to_string(auction_id))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(winner))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(seller))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(nft))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(tok))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(price))
+    entry = concat(entry, "|")
+    entry = concat(entry, to_string(epoch))
+    _log(entry)
+    return true
+  }
+
+  //| Withdraws the caller's credit: proceeds, royalties and outbid bids.
+  //| who      any address with a credit
+  //| pays     the full credit to the caller
+  //| reveals  the amount withdrawn
+  //| out      true
+  fn claim_proceeds(): bool {
+    let amount: u128 = self.pending[to_string(caller)]
+    require(amount > 0, "xenglish: nothing to claim")
+    self.pending[to_string(caller)] = 0
+    let ok: bool = transfer(caller, amount)
+    require(ok, "xenglish: payout failed")
+    return true
+  }
+
+  //| Withdraws the accrued marketplace fees.
+  //| who      the contract owner
+  //| pays     the fee balance to the recipient
+  //| in       to  recipient
+  //| out      true
+  fn withdraw_fees(to: address): bool {
+    require(caller == self.owner, "xenglish: not owner")
+    let amount: u128 = self.fee_balance
+    require(amount > 0, "xenglish: no fees")
+    self.fee_balance = 0
+    let ok: bool = transfer(to, amount)
+    require(ok, "xenglish: withdraw failed")
+    return true
+  }
+
+  //| Credit an address can withdraw or bid with.
+  //| in       who  the address
+  //| out      amount
+  view fn get_proceeds(who: address): u128 {
+    return self.pending[to_string(who)]
+  }
+
+  //| Major version.
+  //| out      1
+  view fn get_version(): u128 {
+    return 1
+  }
+
+  //| Contract totals.
+  //| out      auction_count|event_count|escrowed|fee_balance|total_volume
+  view fn get_stats(): string {
+    let s: string = concat(to_string(self.auction_count), "|")
+    s = concat(s, concat(to_string(self.event_log_count), "|"))
+    s = concat(s, concat(to_string(self.escrowed), "|"))
+    s = concat(s, concat(to_string(self.fee_balance), "|"))
+    return concat(s, to_string(self.total_volume))
+  }
+
+  //| Terms and state of an auction. status is 1 live, 2 sold, 3 unsold, 4 cancelled.
+  //| in       auction_id  the auction
+  //| out      status|seller|nft|token_id|start|inc_bps|open_epoch|end_epoch|held|top_bid|top_bidder|bid_count|gated
+  view fn get_auction(auction_id: u128): string {
+    let s: string = concat(to_string(self.a_status[auction_id]), "|")
+    s = concat(s, concat(to_string(self.a_seller[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_contract[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_token[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_start[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_inc_bps[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_open_at[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_end_at[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_held[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_top[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_top_by[auction_id]), "|"))
+    s = concat(s, concat(to_string(self.a_bids[auction_id]), "|"))
+    return concat(s, to_string(self.a_gated[auction_id]))
+  }
+
+  //| Entry i of the event log, from 0 to event_count - 1. Each writing function lists the entry it writes.
+  //| in       i  entry index
+  //| out      entry
+  view fn get_event(i: u128): string {
+    return self.event_log[i]
+  }
+}

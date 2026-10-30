@@ -1,24 +1,38 @@
-// XNS-1: the Xpectrum NFT standard, rev 4.
-// Token ids are 0-indexed, so the first mint is id 0.
-// next_id only counts up. Live supply is next_id - burned_count, derived on read rather than stored.
-// Burned tokens have owner 0. Transfers refuse to == 0, so that state means burned and nothing else.
-// metadata_uri should be oct://[circle_id]/[token_id].json per metadata-standard-v1.
-//
-// get_token_info >> id | owner | creator | name | royalty_bps | minted_epoch | uri
-// get_token_circle_info >> token_id | resource_id | uri | access | active | version
-// get_contract_info >> name | symbol | total_supply | owner | total_minted | burned | events
+// SPDX-License-Identifier: MIT
+
+//| XNS1
+//| Reference implementation of XNS-1, the token interface every Xpectrum collection implements and Xmarket trades.
+//|
+//| model    one owner-minted token per id; ids start at 0 and are never reused
+//| custody  tokens are recorded against their owner; a burned token has owner 0, and transfers refuse 0 as a recipient
+//| payout   this contract holds no OCT
+//| privacy  owners, approvals, operators and every transfer are public state
+//| units    royalties in basis points, at most 1000; time in epochs
+//| supply   live supply is next_id - burned_count, derived on read
+//| version  4.0.0
+//| license  MIT
 
 contract XNS1 {
 
+  //| Written when a token is minted.
   event Minted(token_id: u128, owner: address, creator: address)
+  //| Written on mint (from 0), transfer, and burn (to 0).
   event Transferred(token_id: u128, from: address, to: address)
+  //| Written when a token is burned, with the live supply after it.
   event Burned(token_id: u128, owner: address, total_supply: u128)
+  //| Written when a token approval is set.
   event Approved(token_id: u128, approved: address)
+  //| Written when a token approval is cleared.
   event ApprovalRevoked(token_id: u128)
+  //| Written when an operator is granted or revoked.
   event OperatorSet(owner: address, operator: address, approved: u128)
+  //| Written when the contract owner changes.
   event OwnershipTransferred(old_owner: address, new_owner: address)
+  //| Written once, when the provenance hash is set.
   event ProvenanceHashSet(hash: string)
+  //| Written when a circle resource is added or replaced.
   event CircleResourceSet(token_id: u128, resource_id: u128, uri: string, access: string)
+  //| Written when a circle resource is cleared.
   event CircleResourceCleared(token_id: u128, resource_id: u128)
 
   const MAX_ROYALTY_BPS: u128 = 1000
@@ -60,7 +74,6 @@ contract XNS1 {
     require(caller == self.owner, "xns1: not authorized")
   }
 
-  // phase 3 / price 0: no sale phases here, but the indexer parses one line format for every collection
   private fn _log_mint(token_id: u128, to: address) {
     let entry = concat("mint|", to_string(token_id))
     entry = concat(entry, "|")
@@ -93,6 +106,15 @@ contract XNS1 {
     self.event_log_count += 1
   }
 
+  //| Mints the next token id.
+  //| who      the contract owner
+  //| holds    the token is recorded against to
+  //| logs     Minted, Transferred(id, 0, to), and mint|id|to|3|0|epoch in the event log
+  //| in       to            recipient
+  //| in       creator       address paid royalties
+  //| in       metadata_uri  token metadata, oct://circle_id/token_id.json
+  //| in       royalty_bps   royalty, at most 1000
+  //| out      the new token id
   fn mint(to: address, creator: address, metadata_uri: string, royalty_bps: u128): u128 {
     only_owner()
     assert_address(to)
@@ -120,6 +142,12 @@ contract XNS1 {
     return id
   }
 
+  //| Burns a token. Supply falls by one and the id is never reused.
+  //| who      the token's owner
+  //| holds    the token's owner becomes 0 and its approval is cleared
+  //| logs     Transferred(id, owner, 0), Burned, and burn|id|owner|epoch in the event log
+  //| in       token_id  the token
+  //| out      true
   fn burn(token_id: u128): bool {
     require(token_id < self.next_id, "xns1: token not found")
 
@@ -145,6 +173,13 @@ contract XNS1 {
     return true
   }
 
+  //| Transfers a token from the caller.
+  //| who      the token's owner
+  //| holds    the token moves to to and its approval is cleared
+  //| logs     Transferred, and xfer|id|from|to|epoch in the event log
+  //| in       to        recipient, not the current owner
+  //| in       token_id  the token
+  //| out      true
   fn transfer(to: address, token_id: u128): bool {
     require(token_id < self.next_id, "xns1: token not found")
     assert_address(to)
@@ -169,6 +204,14 @@ contract XNS1 {
     return true
   }
 
+  //| Transfers a token on the owner's behalf.
+  //| who      the owner, the token's approved address, or an operator of the owner
+  //| holds    the token moves to to and its approval is cleared
+  //| logs     Transferred, and xfer|id|from|to|epoch in the event log
+  //| in       from      the current owner
+  //| in       to        recipient, not the current owner
+  //| in       token_id  the token
+  //| out      true
   fn transfer_from(from: address, to: address, token_id: u128): bool {
     require(token_id < self.next_id, "xns1: token not found")
     assert_address(from)
@@ -201,6 +244,12 @@ contract XNS1 {
     return true
   }
 
+  //| Approves one address to transfer a token.
+  //| who      the token's owner or an operator of the owner
+  //| logs     Approved
+  //| in       approved  the address approved
+  //| in       token_id  the token
+  //| out      true
   fn approve(approved: address, token_id: u128): bool {
     require(token_id < self.next_id, "xns1: token not found")
     assert_address(approved)
@@ -215,6 +264,11 @@ contract XNS1 {
     return true
   }
 
+  //| Clears a token's approval.
+  //| who      the token's owner or an operator of the owner
+  //| logs     ApprovalRevoked
+  //| in       token_id  the token
+  //| out      true
   fn revoke_approval(token_id: u128): bool {
     require(token_id < self.next_id, "xns1: token not found")
 
@@ -228,6 +282,12 @@ contract XNS1 {
     return true
   }
 
+  //| Grants or revokes an operator for all of the caller's tokens.
+  //| who      any holder
+  //| logs     OperatorSet
+  //| in       operator  the operator, not the caller
+  //| in       approved  1 grant, 0 revoke
+  //| out      true
   fn set_operator(operator: address, approved: u128): bool {
     assert_address(operator)
     require(operator != caller, "xns1: cannot self-operate")
@@ -238,6 +298,11 @@ contract XNS1 {
     return true
   }
 
+  //| Hands the contract to a new owner.
+  //| who      the contract owner
+  //| logs     OwnershipTransferred
+  //| in       new_owner  the new owner
+  //| out      true
   fn transfer_ownership(new_owner: address): bool {
     only_owner()
     assert_address(new_owner)
@@ -248,6 +313,11 @@ contract XNS1 {
     return true
   }
 
+  //| Sets the provenance hash. It can be set once and never changed.
+  //| who      the contract owner
+  //| logs     ProvenanceHashSet
+  //| in       hash  the provenance hash, not empty
+  //| out      true
   fn set_provenance_hash(hash: string): bool {
     only_owner()
     require(self.provenance_hash == "", "xns1: provenance hash already set")
@@ -257,10 +327,19 @@ contract XNS1 {
     return true
   }
 
+  //| Provenance hash.
+  //| out      the hash, or empty before it is set
   view fn get_provenance_hash(): string {
     return self.provenance_hash
   }
 
+  //| Adds a circle resource pointer to a live token.
+  //| who      the contract owner
+  //| logs     CircleResourceSet
+  //| in       token_id  the token
+  //| in       uri       the resource, usually oct://...
+  //| in       access    a client hint, not enforced
+  //| out      the new resource id
   fn add_circle_resource(token_id: u128, uri: string, access: string): u128 {
     only_owner()
     require(token_id < self.next_id, "xns1: token not found")
@@ -279,6 +358,14 @@ contract XNS1 {
     return resource_id
   }
 
+  //| Replaces a circle resource pointer and marks it active.
+  //| who      the contract owner
+  //| logs     CircleResourceSet
+  //| in       token_id     the token
+  //| in       resource_id  the resource
+  //| in       uri          the resource, usually oct://...
+  //| in       access       a client hint, not enforced
+  //| out      true
   fn set_circle_resource(token_id: u128, resource_id: u128, uri: string, access: string): bool {
     only_owner()
     require(token_id < self.next_id, "xns1: token not found")
@@ -292,7 +379,12 @@ contract XNS1 {
     return true
   }
 
-  // no burned check here on purpose: attaching content to a burned token is wrong, clearing it is cleanup
+  //| Clears a circle resource pointer. Allowed on a burned token.
+  //| who      the contract owner
+  //| logs     CircleResourceCleared
+  //| in       token_id     the token
+  //| in       resource_id  the resource
+  //| out      true
   fn clear_circle_resource(token_id: u128, resource_id: u128): bool {
     only_owner()
     require(token_id < self.next_id, "xns1: token not found")
@@ -305,36 +397,55 @@ contract XNS1 {
     return true
   }
 
+  //| Owner of a live token.
+  //| in       token_id  the token
+  //| out      address; reverts for a burned or unminted id
   view fn owner_of(token_id: u128): address {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
     return self.token_owner[token_id]
   }
 
+  //| Creator of a live token, who is paid its royalty.
+  //| in       token_id  the token
+  //| out      address
   view fn creator_of(token_id: u128): address {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
     return self.token_creator[token_id]
   }
 
+  //| Royalty of a live token.
+  //| in       token_id  the token
+  //| out      basis points
   view fn royalty_of(token_id: u128): u128 {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
     return self.token_royalty_bps[token_id]
   }
 
+  //| Metadata uri of a live token.
+  //| in       token_id  the token
+  //| out      uri
   view fn token_uri(token_id: u128): string {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
     return self.token_uri_of[token_id]
   }
 
+  //| Number of circle resources recorded for a live token, including cleared ones.
+  //| in       token_id  the token
+  //| out      count
   view fn token_circle_count(token_id: u128): u128 {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
     return self.circle_resource_count[token_id]
   }
 
+  //| Circle resource uri of a live token.
+  //| in       token_id     the token
+  //| in       resource_id  the resource
+  //| out      uri, or empty when cleared
   view fn token_circle_uri(token_id: u128, resource_id: u128): string {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
@@ -345,46 +456,70 @@ contract XNS1 {
     return self.circle_resource_uri[token_id][resource_id]
   }
 
+  //| Collection name of a live token.
+  //| in       token_id  the token
+  //| out      name
   view fn collection_of(token_id: u128): string {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
     return self.name
   }
 
+  //| Number of live tokens an address holds.
+  //| in       addr  the address
+  //| out      count
   view fn balance_of(addr: address): u128 {
     assert_address(addr)
     return self.balances[addr]
   }
 
+  //| Approved address of a live token.
+  //| in       token_id  the token
+  //| out      address, or 0 for none
   view fn get_approved(token_id: u128): address {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
     return self.approvals[token_id]
   }
 
+  //| Live supply.
+  //| out      minted minus burned
   view fn total_supply(): u128 {
     require(self.next_id >= self.burned_count, "xns1: supply underflow")
     return self.next_id - self.burned_count
   }
 
+  //| Number of ids ever minted.
+  //| out      count
   view fn total_minted(): u128 {
     return self.next_id
   }
 
+  //| Number of tokens burned.
+  //| out      count
   view fn burned(): u128 {
     return self.burned_count
   }
 
+  //| Whether a minted token has been burned.
+  //| in       token_id  the token
+  //| out      1 burned, 0 live
   view fn is_burned(token_id: u128): u128 {
     require(token_id < self.next_id, "xns1: token not found")
     if self.token_owner[token_id] == 0 { return 1 }
     return 0
   }
 
+  //| Collection symbol.
+  //| out      symbol
   view fn symbol(): string {
     return self.symbol
   }
 
+  //| Whether an address may transfer a live token. Xmarket requires this to return 1.
+  //| in       token_id  the token
+  //| in       addr      the address
+  //| out      1 owner, approved or operator; 0 otherwise
   view fn is_approved_or_owner(token_id: u128, addr: address): u128 {
     assert_address(addr)
     require(token_id < self.next_id, "xns1: token not found")
@@ -397,6 +532,9 @@ contract XNS1 {
     return 0
   }
 
+  //| Summary of a live token.
+  //| in       token_id  the token
+  //| out      id|owner|creator|name|royalty_bps|minted_epoch|uri
   view fn get_token_info(token_id: u128): string {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
@@ -417,6 +555,10 @@ contract XNS1 {
     return out
   }
 
+  //| Circle resource record of a live token.
+  //| in       token_id     the token
+  //| in       resource_id  the resource
+  //| out      token_id|resource_id|uri|access|active|version, version is 2
   view fn get_token_circle_info(token_id: u128, resource_id: u128): string {
     require(token_id < self.next_id, "xns1: token not found")
     require(self.token_owner[token_id] != 0, "xns1: token burned")
@@ -435,6 +577,8 @@ contract XNS1 {
     return out
   }
 
+  //| Summary of the collection. Implementations may append fields; read from the left.
+  //| out      name|symbol|total_supply|owner|total_minted|burned|events
   view fn get_contract_info(): string {
     require(self.next_id >= self.burned_count, "xns1: supply underflow")
     let supply: u128 = self.next_id - self.burned_count
@@ -455,6 +599,10 @@ contract XNS1 {
     return out
   }
 
+  //| Page of the event log.
+  //| in       from   first entry index
+  //| in       count  entries wanted, at most 50
+  //| out      total~entry~entry..., entries mint|id|to|3|0|epoch, xfer|id|from|to|epoch, burn|id|owner|epoch
   view fn get_event_log(from: u128, count: u128): string {
     let total = self.event_log_count
     let out = to_string(total)

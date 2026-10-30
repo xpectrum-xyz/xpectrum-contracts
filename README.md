@@ -1,216 +1,202 @@
-# xpectrum-contracts
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-contracts-dark.svg">
+  <img alt="Xpectrum contracts" src=".github/assets/banner-contracts-light.svg" width="100%">
+</picture>
 
-Smart contracts for [Xpectrum](https://xpectrum.xyz), the ownership layer for on-chain objects on [Octra](https://octra.org).
+**[Marketplace](https://app.xpectrum.xyz)** | [Creators](https://creators.xpectrum.xyz) | [Docs](https://docs.xpectrum.xyz) | [Changelog](./CHANGELOG.md) | [Octrascan](https://octrascan.io)
 
-Written in AML (Applied Meta Language), Octra's native contract language. Every contract here is formally verified with the AML AST verifier (`aml_safety_report_v1`, Coq-backed model) before deployment, and the full report for each is in [`verification/`](./verification/).
+The contracts behind Xpectrum on Octra mainnet: the NFT standard, the launch factory and its collections, four ways to trade, and the Xpectra collection.
+Every file here compiles to the exact bytecode running at its address, and [`scripts/verify.sh`](./scripts/verify.sh) proves it against a node in about a minute, with no wallet and no fee.
 
-Versions follow [CHANGELOG.md](./CHANGELOG.md), which says what changed and whether callers have to do anything.
+## Deployments
 
----
+Octra mainnet. Every address links to Octrascan.
 
-## Deployed on Octra mainnet
+| Contract | Version | Address | Purpose |
+|---|---|---|---|
+| [XuperFactory](./contracts/launch/XuperFactory.aml) | 4.0.0 | [`octCzmWD…4rx2nz`](https://octrascan.io/address.html?addr=octCzmWDXWPFWzFhjPXF3rfdeecFPNYedAoRjUyBU4rx2nz) | Creates a configured collection in one transaction |
+| [Xcollection](./contracts/launch/Xcollection.aml) | 6.0.0 | one per launch | The collection and its sale, deployed by XuperFactory |
+| [Xlist](./contracts/launch/Xlist.aml) | 4.0.0 | [`octBnPAc…y5qiG9`](https://octrascan.io/address.html?addr=octBnPAc1ckgGwXDDHGJcbAFtDb7ttorssqsz54epy5qiG9) | Shared allowlists and holder lists |
+| [Xmarket](./contracts/market/Xmarket.aml) | 3.2.0 | [`octGoeTj…VmBj6h`](https://octrascan.io/address.html?addr=octGoeTjaF8MiKTP5ad5FJfWMCZmmEdnrfxTow6UUVmBj6h) | Fixed-price listings, token offers, collection offers |
+| [Xauction](./contracts/market/Xauction.aml) | 5.0.0 | [`octBv5yU…16LkUn`](https://octrascan.io/address.html?addr=octBv5yUWMp3D5mAVcvpgC3DWgUGvH8KPMkfsSXv216LkUn) | Sealed-bid auctions |
+| [Xdutch](./contracts/market/Xdutch.aml) | 2.0.0 | [`octxD2gf…JjN2s5`](https://octrascan.io/address.html?addr=octxD2gf2i6NDj3XJGBpNNNgiejnUFV1Dk45rNr5fJjN2s5) | Descending-price auctions |
+| [Xenglish](./contracts/market/Xenglish.aml) | 1.0.0 | [`oct8p3Uh…W46ipU`](https://octrascan.io/address.html?addr=oct8p3UhGRurjgbfbMERZBENuft4hcodx6DMTJj14W46ipU) | Open ascending auctions |
+| [XpectrumGenesis](./contracts/xpectra/XpectrumGenesis.aml) | 1.0.1 | [`octC4PvH…dstZfQ`](https://octrascan.io/address.html?addr=octC4PvHrT8U1vDsZ5ejEBj6UgW2fRoLfohFBSCePdstZfQ) | The Xpectra collection |
+| [Xlist](./contracts/xpectra/Xlist.aml) | 2.0.0 | [`oct6hqXn…dKhXzx`](https://octrascan.io/address.html?addr=oct6hqXn2kSm8HptJ3MRmRAbTaY4jvTHH2ntFcSWKdKhXzx) | The Xpectra allowlist |
+| [Xincinerator](./contracts/xpectra/Xincinerator.aml) | 1.0.0 | [`octGn3Qw…oaeg6q`](https://octrascan.io/address.html?addr=octGn3QwHTcGjo6Vjz5G9y8Z9hZDsYoA7gbksRqdJoaeg6q) | Burn address |
+| [XincineratorLog](./contracts/xpectra/XincineratorLog.aml) | 1.0.0 | [`oct4u3Pm…dPN3zh`](https://octrascan.io/address.html?addr=oct4u3PmynG2jDJADUF1iVTwPA8oxNy2LQTYNKueGdPN3zh) | Burns a holder's own tokens into the burn address |
+| [XNS1](./contracts/standard/XNS1.aml) | 4.0.0 | not deployed | Reference implementation of the XNS-1 standard |
 
-| Contract | Version | Address |
-|---|---|---|
-| Xmarket | v3.2.0 | `octGoeTjaF8MiKTP5ad5FJfWMCZmmEdnrfxTow6UUVmBj6h` |
-| XuperFactory | v2.0.0 | `octHgTcvueQE5LRb2PYLJqa5T9ypUgBuyY5XyxRstoSdBVN` |
-| Xcollection | v4.0.0 | deployed per collection by XuperFactory |
-| Xlist | v2.0.0 | deployed per collection by XuperFactory, from embedded bytecode |
-| XpectrumGenesis (Xpectra) | v1.0.1 | `octC4PvHrT8U1vDsZ5ejEBj6UgW2fRoLfohFBSCePdstZfQ` |
-| Xincinerator | v1.0.0 | `octGn3QwHTcGjo6Vjz5G9y8Z9hZDsYoA7gbksRqdJoaeg6q` |
-| XincineratorLog | v1.0.0 | `oct4u3PmynG2jDJADUF1iVTwPA8oxNy2LQTYNKueGdPN3zh` |
+Superseded and still on chain: [XuperFactory 2.0.0](./contracts/legacy/XuperFactory.aml) at [`octHgTcv…oSdBVN`](https://octrascan.io/address.html?addr=octHgTcvueQE5LRb2PYLJqa5T9ypUgBuyY5XyxRstoSdBVN) and the [Xcollection 4.0.0](./contracts/legacy/Xcollection.aml) it deploys.
+New launches go through 4.0.0.
 
-RPC `https://octra.network/rpc`, explorer [octrascan.io](https://octrascan.io). Mainnet rejects requests that do not present browser headers. Send an `Origin` and a `User-Agent` header, otherwise the response is an HTML error page rather than JSON.
+The same list is machine-readable in [`deployments.json`](./deployments.json), with each contract's bytecode hash and certificate path.
 
----
+## Architecture
 
-## Contracts
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/architecture-dark.svg">
+  <img alt="How the Xpectrum contracts call each other" src=".github/assets/architecture-light.svg" width="100%">
+</picture>
 
-### XNS-1: the Xpectrum NFT standard
+Every arrow is a cross-contract call that appears in the source.
 
-XNS-1 is the token interface every NFT on Xpectrum implements, and the one a third party implements to trade on Xmarket without asking anyone.
+**Launch.** `XuperFactory.create_collection` deploys an Xcollection with every setting passed to its constructor, so a collection never exists half configured.
+The collection runs its own sale: Xpectra holders first, up to four listed phases, public last.
+A paid mint sends the 2.5% platform fee and the creator's proceeds in the same transaction, so the collection holds no OCT between calls.
+Listed phases read membership from Xlist, where each collection owns its lists.
 
-`contracts/XNS1.aml` is the reference implementation, **v4.0.0**. It is formally verified on both chains and is **not deployed**. It is provided as source to implement against. The working implementations in production are `Xcollection.aml` and `XpectrumGenesis.aml`, which are also here.
+**Collections.** Anything that implements XNS-1 can be traded on the four market contracts without registration.
+Xcollection and XpectrumGenesis are the two implementations in production.
 
-Xmarket relies on five entry points. These are the ones that must match exactly:
+**Trading.** Xmarket, Xauction, Xdutch and Xenglish read ownership, approval, creator and royalty from the collection and move the token with `transfer_from`.
+Each takes a 2.5% fee and pays the collection's royalty, capped at 10%, at settlement.
+Proceeds, royalties and refunds are credited inside the market contract and withdrawn with `claim_proceeds`.
+
+## XNS-1
+
+XNS-1 is the token interface every Xpectrum collection speaks.
+The market contracts depend on five entry points, and these must match exactly:
 
 | Entry point | Signature | Returns |
 |---|---|---|
-| `owner_of` | `(token_id: u128)` | `address` |
+| `owner_of` | `(token_id: u128)` | the owner |
 | `is_approved_or_owner` | `(token_id: u128, addr: address)` | `u128`, `1` or `0` |
-| `creator_of` | `(token_id: u128)` | `address` |
-| `royalty_of` | `(token_id: u128)` | `u128`, basis points, max 1000 |
+| `creator_of` | `(token_id: u128)` | the royalty recipient |
+| `royalty_of` | `(token_id: u128)` | `u128` basis points, at most `1000` |
 | `transfer_from` | `(from: address, to: address, token_id: u128)` | moves the token |
 
-Two constraints apply.
+`is_approved_or_owner` returns `u128`, not `bool`.
+Settlement runs `require(approved == 1)`, which a `bool` can never satisfy, so a contract that returns `bool` compiles, verifies and then fails every sale.
+It takes `token_id` first and the address second.
 
-`is_approved_or_owner` must return **`u128`**, not `bool`. Xmarket settles on `require(approved == 1)`, which a `bool` return can never satisfy, so a contract that returns `bool` compiles, verifies, and is then silently untradeable. Earlier revisions of this contract returned `bool`. Implement against v4.0.0.
+Xmarket and Xauction also accept collections shaped like ERC-721 through a standard-mode lane, which checks `owner_of` and `get_approved` instead.
+The owner enables it per collection.
 
-It also takes `token_id` first and the address second. Reversing them fails at settlement rather than at the call.
+[`XNS1.aml`](./contracts/standard/XNS1.aml) is a complete reference implementation with burn, operators, a one-way provenance hash and circle resource pointers.
+It is not deployed and exists to be read and copied.
 
-The rest of the interface: mint, transfer, approve and the operator pattern; `burn`, holder-only, with `total_minted` monotonic and live supply derived as `total_minted - burned`; a one-way provenance hash; per-token and contract-level circle resource pointers; and `get_token_info`, `get_contract_info`, `get_token_circle_info` for indexers and wallets.
+## Repository layout
 
-An implementation may append its own columns to `get_contract_info`, and both production contracts in this repository do. Parse from the left and tolerate trailing fields.
-
-### Xcollection: the drop contract
-
-The full launch contract. Implements XNS-1 and handles the whole collection lifecycle. Deployed and linked by XuperFactory.
-
-- three-phase minting: guaranteed, first come, public, each a time window in epochs with a 240-epoch minimum
-- per-phase caps, per-phase wallet caps, and a global wallet cap
-- xholder reserve: `min(floor(max_supply * 0.2), 111)` held for Xpectra holders, its own pool, decoupled from the guaranteed allocation so it can never erode a creator's allowlist. One claim per wallet.
-- `trigger_sweep()` is permissionless: once guaranteed ends, anyone may return unclaimed reserve slots to the public pool
-- `burn(token_id)`, callable only by the current holder. `max_supply` never moves, ids are never reused, live supply is derived as `total_minted - burned`
-- airdrop, up to 20 addresses per call, all or nothing
-- pull-based proceeds, split 97.5% creator / 2.5% platform
-- reveal, with an unrevealed URI before it
-- one-way provenance hash
-- holder enumeration index, `get_holders_page`
-- `trusted_factory` auth, pause/unpause, phase override
-
-### Xmarket: secondary trading
-
-Works with any XNS-1 contract, and with contracts shaped like ERC-721 through the standard-mode lane.
-
-- list, buy, cancel
-- single-token offers and collection-wide offers, the latter carrying a quantity
-- royalties enforced on every sale
-- all proceeds pull-based, through `claim_proceeds()`
-- 2.5% fee
-- a caller cannot buy their own listing or accept their own offer
-- swap-and-pop index with stale-entry zeroing
-
-### Xlist: allowlists
-
-One Xlist is deployed per collection and bound to it at creation. XuperFactory deploys it from embedded bytecode as part of the same transaction, so there is no separate factory call.
-
-- phase 0 is guaranteed, phase 1 is first come
-- `add_batch` / `remove_batch`, 20 addresses per call
-- `is_whitelisted` answers only the collection it is registered to
-
-Its source is not yet published. The compiled bytecode is embedded in `XuperFactory.aml` and is therefore public, but the corresponding AML source is not. Publishing it is outstanding.
-
-### XuperFactory: permissionless launcher
-
-Deploys a linked Xcollection and Xlist in a single transaction. No owner gate on `create_collection`: any wallet may launch.
-
-- embeds the verified Xcollection bytecode
-- deploys the Xlist from embedded bytecode and links both, in the same transaction
-- the platform wallet is held in factory state, never taken from the caller
-- `create_collection` requires a launch fee, currently 1 OCT, readable with `get_launch_fee()`. The fee accrues in the contract and is withdrawn separately, so the launch path contains no external transfer that could revert a deploy.
-- `get_collection(idx)` and `get_count()` enumerate
-
-### XpectrumGenesis: the founding collection
-
-The root collection, deployed once as **Xpectra**. Three-phase mint with no parent reserve of its own, because holding Xpectra is what grants the reserve on other collections.
-
-No `xholder_mint`, no reserve, and no `burn`: its supply is fixed at what was minted.
-
-### Xincinerator and XincineratorLog: burning by retirement
-
-`XpectrumGenesis` has no burn function. 111 Xpectra were therefore burned by transferring them to a contract that has no mechanism to transfer them out.
-
-`Xincinerator` is the sink. It declares no owner, no entry points and no `call()`, and exposes two view functions and nothing else. This is verifiable directly: `octra_contractAbi(<Xincinerator>)` returns two functions, both marked `view: true`, so no code path exists that can transfer a token out.
-
-`XincineratorLog` batches transfers into the sink and emits `Burned`. It can only ever name the incinerator fixed in its constructor, and only touches tokens whose owner is the caller.
-
----
-
-## Naming
-
-A source file is named for its contract, with no version in the filename. The version lives in [CHANGELOG.md](./CHANGELOG.md) and in the certificate name, and nowhere else.
-
-There is one exception. `Xmarket.aml` declares `contract Xmarket_v3` while the contract is at version v3.2.0. The contract identifier is compiled into the bytecode, so correcting it would require redeploying a live marketplace to resolve a cosmetic inconsistency, and it is therefore retained as is. No other contract carries a version in its identifier.
-
-## Formal verification
-
-| Contract | Version | Verified | Errors | Warnings | bytecode_hash |
-|---|---|---|---|---|---|
-| XNS1 (reference, not deployed) | v4.0.0 | true | 0 | 7 | `cabadd61…` mainnet / `5336acb6…` devnet |
-| Xcollection | v4.0.0 | true | 0 | 7 | `e097aa4c…` |
-| Xmarket | v3.2.0 | true | 0 | 0 | `943cbd42…` |
-| XuperFactory | v2.0.0 | true | 0 | 1 | `4fa02e39…` |
-| XpectrumGenesis | v1.0.1 | true | 0 | 4 | `9e17d6c9…` |
-| Xincinerator | v1.0.0 | true | 0 | 0 | `de1ce6aa…` |
-| XincineratorLog | v1.0.0 | true | 0 | 2 | `7b12f208…` |
-
-Every warning is `unsigned_parameter_without_positive_guard`, on token ids, royalty, and the launch fee. They are documented false positives: zero is a valid token id because ids are 0-indexed, `royalty_bps = 0` means royalty-free, and a launch fee of 0 is deliberately allowed so launching can be made free.
-
-Every certificate in `verification/` was generated on 2026-09-04 by compiling the source file beside it, so each one certifies that exact file and nothing else. `scripts/verify.sh` recompiles every source and checks it against its certificate. It is run before every push.
-
-Each report in `verification/` carries the `bytecode_hash`, `source_hash` and `verification_hash` for that build. Compare a fresh compile against `bytecode_hash`, not `source_hash`: comments do not change bytecode, so `source_hash` moves on a comment edit while `bytecode_hash` does not.
-
-The same source compiles to different bytecode on devnet and mainnet. That is a property of the toolchain, not a mismatch, so a per-chain build has its own `bytecode_hash`.
-
-`XuperFactory.aml` here is the **mainnet** build. The factory embeds compiled Xcollection bytecode, and that blob is compiled per chain, so the devnet build differs from this file in exactly one constant (`XCOLLECTION_BYTECODE`) and nowhere else.
-
-## Reproducing a hash
-
-Any source file can be compiled directly against the node and the resulting hash compared. This requires no wallet and no local toolchain, and the call is a free read.
-
-```bash
-curl -s -X POST https://octra.network/rpc \
-  -H "Content-Type: application/json" \
-  -H "Origin: https://app.xpectrum.xyz" \
-  -H "User-Agent: Mozilla/5.0" \
-  -d "$(jq -Rs '{jsonrpc:"2.0",method:"octra_compileAml",params:[.],id:1}' contracts/Xmarket.aml)" \
-  | jq -r '.result.certificate.bytecode_hash'
+```
+contracts/
+  standard/   XNS1                                    the interface, as a reference implementation
+  launch/     XuperFactory, Xcollection, Xlist        launching a collection
+  market/     Xmarket, Xauction, Xdutch, Xenglish     trading any XNS-1 contract
+  xpectra/    XpectrumGenesis, Xlist, Xincinerator,   the Xpectra collection and its burn path
+              XincineratorLog
+  legacy/     XuperFactory 2.0.0, Xcollection 4.0.0   superseded, still deployed
+verification/  one certificate per source, same layout
+deployments.json
+scripts/verify.sh
 ```
 
-Known good, verified 2026-09-04:
+A source file is named for its contract and carries no version; the version lives in the certificate name, the source header and the changelog.
+Three contracts declare a different identifier from their filename, because the identifier is compiled into deployed bytecode and cannot change without a redeploy: `Xmarket.aml` declares `Xmarket_v3`, `Xauction.aml` declares `Xauction_v2` and `xpectra/Xlist.aml` declares `Xlist_v2`.
 
-| File | bytecode_hash |
+`launch/XuperFactory.aml` is the mainnet build.
+The factory embeds the compiled Xcollection as a constant, and the compiler produces different bytecode on devnet and mainnet for the same source, so a devnet build of the factory differs in that one constant.
+
+## Verifying
+
+```sh
+scripts/verify.sh           # recompile every source and compare it with its certificate
+scripts/verify.sh --live    # also compare each deployed contract with the code running on chain
+```
+
+Requires `curl` and `jq`.
+Compilation is a free read on any Octra node and needs no wallet.
+Exit status 0 means every source matches.
+
+A single file can be checked by hand:
+
+```sh
+curl -s https://octra.network/rpc \
+  -H 'Content-Type: application/json' -H 'Origin: https://octra.network' -H 'User-Agent: Mozilla/5.0' \
+  -d "$(jq -Rs '{jsonrpc:"2.0",id:1,method:"octra_compileAml",params:[.,true]}' contracts/market/Xmarket.aml)" \
+  | jq -r .result.certificate.bytecode_hash
+# 943cbd42f67c2d704c1ec7b1f01facc1a59024a4ce79db7afc8686baeec60e66
+
+curl -s https://octra.network/rpc \
+  -H 'Content-Type: application/json' -H 'Origin: https://octra.network' -H 'User-Agent: Mozilla/5.0' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"vm_contract","params":["octGoeTjaF8MiKTP5ad5FJfWMCZmmEdnrfxTow6UUVmBj6h"]}' \
+  | jq -r .result.code_hash
+# 943cbd42f67c2d704c1ec7b1f01facc1a59024a4ce79db7afc8686baeec60e66
+```
+
+Mainnet refuses requests without browser headers and answers with an HTML error page instead of JSON, which is why both calls send `Origin` and `User-Agent`.
+
+Compare `bytecode_hash`, not `source_hash`.
+Comments do not change bytecode, so `source_hash` moves on a documentation edit while `bytecode_hash` stays fixed.
+
+### Verifier report
+
+Every contract passes Octra's AML safety verifier (`aml_safety_report_v1`) with 0 errors.
+The full report for each is in [`verification/`](./verification/).
+
+| Contract | Warnings | Flagged parameters |
+|---|---|---|
+| XuperFactory 4.0.0 | 2 | `create_collection.max_supply`, `set_launch_fee.fee` |
+| Xcollection 6.0.0 | 6 | `mint.quantity` and five `token_id` parameters |
+| Xlist 4.0.0 | 0 | |
+| Xmarket 3.2.0 | 0 | |
+| Xauction 5.0.0 | 6 | three bid `amount` parameters, three `auction_id` parameters |
+| Xdutch 2.0.0 | 1 | `reclaim.sale_id` |
+| Xenglish 1.0.0 | 1 | `bid.amount` |
+| XpectrumGenesis 1.0.1 | 4 | four `token_id` parameters |
+| Xlist 2.0.0 | 0 | |
+| Xincinerator 1.0.0 | 0 | |
+| XincineratorLog 1.0.0 | 2 | `burn_range.start_id`, `token_is_burned.token_id` |
+| XNS1 4.0.0 | 7 | `mint.royalty_bps` and six `token_id` parameters |
+
+Every warning is `unsigned_parameter_without_positive_guard`, which flags an unsigned parameter that could be zero in a function whose name suggests value moves.
+Each one has been checked against the code.
+Token, sale and auction ids start at 0, so zero is a valid id.
+`quantity` and `max_supply` are checked inside a helper or the collection constructor, which the verifier does not follow.
+Bid amounts are checked against the auction's minimum or the sealed commitment.
+A royalty or launch fee of zero is allowed on purpose.
+
+## Reading the source
+
+Every public function carries a block in Prism, Xpectrum's comment format. This is `Xdutch.open_sale`:
+`//|` lines are documentation; the compiler reads them as ordinary comments.
+
+```
+//| Lists a token and takes it into escrow.
+//| who      the token's owner, who has approved this contract for it
+//| holds    the token moves into this contract
+//| reveals  the seller, the token and every sale term
+//| logs     Listed(sale_id, seller, nft, token_id, start, floor)
+//| in       nft       collection address
+//| in       token_id  token
+//| in       start     opening price
+//| in       floor     lowest price
+//| in       step      price decrease per epoch
+//| in       duration  length in epochs
+//| in       gated     1 for allowlisted buyers only, which refuses everyone until add_allow loads the list
+//| out      sale id
+fn open_sale(nft: address, token_id: u128, start: u128, floor: u128, step: u128, duration: u128, gated: u128): u128
+```
+| Band | Meaning |
 |---|---|
-| `contracts/Xmarket.aml` | `943cbd42f67c2d704c1ec7b1f01facc1a59024a4ce79db7afc8686baeec60e66` |
-| `contracts/XuperFactory.aml` | `4fa02e39bd1c3f2e78f4dba2bb34a6882a3d910a2213e3f6af73c8a9d4228e6a` |
+| `who` | who may call it |
+| `pays` | value attached or paid out |
+| `when` | the epoch window it works in |
+| `holds` | where the token goes |
+| `reveals` | what the call makes public on chain |
+| `logs` | the event written |
+| `in`, `out` | each parameter, and the return with its field order |
 
-Both match what is deployed at the addresses in the table above.
+Each contract header states its custody, payout and privacy model in the same way.
+Amounts are in micro-OCT (1 OCT = 1,000,000) and time is in epochs throughout.
 
----
+## Changelog
 
-## Interface notes
+[CHANGELOG.md](./CHANGELOG.md) lists every version with its impact on callers.
+Contracts are immutable once deployed, so any change ships as a new deployment with a new version.
 
-Amounts are in micro-OCT (`ou`). 1 OCT = 1,000,000 ou.
+## License
 
-Pipe-delimited views:
-
-- `XNS1.get_contract_info()` >> `name | symbol | total_supply | owner | total_minted | burned | events`
-- `XNS1.get_token_info(id)` >> `id | owner | creator | name | royalty_bps | minted_epoch | uri`
-- `XNS1.get_token_circle_info(id, resource_id)` >> `token_id | resource_id | uri | access | active | version`
-- `Xcollection.get_contract_info()` >> `name | symbol | total_minted | max_supply | royalty_bps | owner | revealed | burned`
-- `Xcollection.get_phase_info()` >> `gtd_price | gtd_start | gtd_end | gtd_cap | gtd_minted | gtd_wallet_cap | fcfs_price | fcfs_start | fcfs_end | fcfs_cap | fcfs_minted | fcfs_wallet_cap | pub_price | pub_start | pub_end | pub_cap | pub_minted | pub_wallet_cap | injection_cap | xholder_minted_count`
-- `Xcollection.get_xholder_status()` >> `xholder_minted_count | injection_cap | xpectra_contract | injection_swept`
-- `Xcollection.get_wallet_state(wallet)` >> `paused | phase | minted_by_wallet | wl_gtd | wl_fcfs | pending_proceeds`
-- `Xcollection.get_collection_circle_info(resource_id)` >> `resource_id | base_uri | suffix | unrevealed_uri | access | active | version`
-- `Xcollection.get_holders_page(offset, limit)` >> `total_holders | addr0 | addr1 | ...`
-- `Xmarket.get_listing(id)` >> `listing_id | seller | nft_contract | token_id | price | status | listed_epoch`
-- `Xmarket.get_offer(id)` >> `offer_id | offerer | nft_contract | token_id | offer_is_collection | amount | quantity | expires_epoch | active`
-- `Xmarket.get_market_info()` >> `listing_count | offer_count | total_volume | fee_balance | reserve | offer_reserve`
-
-`XpectrumGenesis` predates the burn work, so its `get_contract_info` ends at `revealed` and it has no `total_minted`, `burned`, `is_burned` or `xholder_*` views. Confirm which contract is being read before indexing into a pipe-delimited result.
-
-### Circle resources
-
-XNS-1 contracts may expose circle resource pointers alongside `token_uri`.
-
-- `token_circle_count(token_id)` returns how many circle refs a token has
-- `token_circle_uri(token_id, resource_id)` returns a ref, usually an `oct://...` uri
-- iterate `0` to `token_circle_count(token_id) - 1`, then read `get_token_circle_info` for `active`
-- `access` is a client hint and is not authoritative
-- circle refs are pointers only. Contracts do not enforce circle access policy.
-
-Xcollection stores collection-level templates: each resource resolves as `base_uri + token_id + suffix` after reveal, or `unrevealed_uri` before it.
-
----
-
-## Building on this
-
-A contract implementing the five entry points above trades on Xmarket without requiring any permission or registration. Match the types exactly. A `bool` return on `is_approved_or_owner` will verify cleanly and then cause every sale to revert, which requires a redeploy to correct.
-
-Full integration guide: [docs.xpectrum.xyz](https://docs.xpectrum.xyz/developers/integrate).
-
----
-
-## Licence
-
-MIT. See [LICENSE](./LICENSE).
+Contracts first published here under MIT remain MIT.
+Contracts whose header carries `SPDX-License-Identifier: FSL-1.1-MIT` are under the Functional Source License 1.1 with MIT as the future license, and each becomes MIT two years after it was published, on the date in its header.
+See [LICENSE](./LICENSE).

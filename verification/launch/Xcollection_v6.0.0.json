@@ -1,0 +1,1147 @@
+{
+  "contract": "Xcollection",
+  "version": "v6.0.0",
+  "generated": "2026-10-30",
+  "chain": "octra mainnet",
+  "source_file": "contracts/launch/Xcollection.aml",
+  "address": null,
+  "size": 27647,
+  "certificate": {
+    "schema": "aml_bytecode_certificate_v1",
+    "compiler": "octra_aml",
+    "compiler_version": "1.0 Rehovot",
+    "verification_schema": "aml_safety_report_v1",
+    "source_mode": "single",
+    "source_hash": "6d4155744d08b2d0583e220e04c4ddad12a3ae7caa6955e708736881feafe33a",
+    "bytecode_hash": "2eafd458e219e1804b7b52029c80ec4459431111a0fe14f2924e272b6670006a",
+    "verification_hash": "00e4196a4e0a680f874566c87b369dd0bb821bbc5e7e351f989f246f82379530"
+  },
+  "verification": {
+    "schema": "aml_safety_report_v1",
+    "engine": "aml_ast_verifier",
+    "proof_model": "formal/coq/aml_value_safety_model.v",
+    "proof_gate": "scripts/check_aml_formal.sh",
+    "program_name": "Xcollection",
+    "verified": true,
+    "safety": "warning",
+    "errors": 0,
+    "warnings": 6,
+    "trace": [
+      {
+        "code": "signed_value_storage",
+        "title": "value-like storage must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_parameter",
+        "title": "value-moving public parameters must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_flow",
+        "title": "signed values must not flow into value-like storage writes",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_arithmetic_range_not_proven",
+        "title": "unsigned arithmetic writes must prove range safety",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "supply_invariant_unproven",
+        "title": "balance and total supply writes should preserve conservation",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_parameter_without_positive_guard",
+        "title": "unsigned value parameters should reject zero unless zero is meaningful",
+        "status": "warning",
+        "severity": "warning",
+        "findings": 6
+      },
+      {
+        "code": "unchecked_transfer_result",
+        "title": "native transfer result should be checked",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      }
+    ],
+    "function_summaries": [
+      {
+        "name": "_is_key",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_only_owner",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_now",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_phase_at",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_open_phase",
+        "visibility": "private",
+        "direct_calls": [
+          "_phase_at"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_shift",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [
+          "phase_end",
+          "sale_start"
+        ],
+        "transitive_writes": [
+          "phase_end",
+          "sale_start"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_holders_left",
+        "visibility": "private",
+        "direct_calls": [
+          "_now"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_unsold_caps",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_reserved_now",
+        "visibility": "private",
+        "direct_calls": [
+          "_holders_left",
+          "_now",
+          "_phase_at",
+          "_unsold_caps",
+          "max"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_revealed",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_stir",
+        "visibility": "private",
+        "direct_calls": [
+          "_revealed",
+          "concat",
+          "current_tx_hash",
+          "index_of",
+          "sha256",
+          "substr",
+          "to_int"
+        ],
+        "direct_writes": [
+          "order_offset",
+          "order_seed"
+        ],
+        "transitive_writes": [
+          "order_offset",
+          "order_seed"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_document",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_set_sale",
+        "visibility": "private",
+        "direct_calls": [
+          "mget",
+          "parse_ints",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "phase_cap",
+          "phase_count",
+          "phase_end",
+          "phase_list",
+          "phase_price",
+          "phase_wallet_cap",
+          "sale_start"
+        ],
+        "transitive_writes": [
+          "phase_cap",
+          "phase_count",
+          "phase_end",
+          "phase_list",
+          "phase_price",
+          "phase_wallet_cap",
+          "sale_start"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_index_add",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position"
+        ],
+        "transitive_writes": [
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_index_remove",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position"
+        ],
+        "transitive_writes": [
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_mint_one",
+        "visibility": "private",
+        "direct_calls": [
+          "_index_add"
+        ],
+        "direct_writes": [
+          "token_owner",
+          "total_minted"
+        ],
+        "transitive_writes": [
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner",
+          "total_minted"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_move_token",
+        "visibility": "private",
+        "direct_calls": [
+          "_index_add",
+          "_index_remove"
+        ],
+        "direct_writes": [
+          "approvals",
+          "token_owner"
+        ],
+        "transitive_writes": [
+          "approvals",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_live_owner",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_can_approve",
+        "visibility": "private",
+        "direct_calls": [
+          "_live_owner",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_pay",
+        "visibility": "private",
+        "direct_calls": [
+          "transfer"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "approvals",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_sell",
+        "visibility": "private",
+        "direct_calls": [
+          "_mint_one",
+          "_pay",
+          "_stir",
+          "_unsold_caps",
+          "to_string"
+        ],
+        "direct_writes": [
+          "phase_minted"
+        ],
+        "transitive_writes": [
+          "approvals",
+          "order_offset",
+          "order_seed",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "phase_minted",
+          "token_owner",
+          "total_minted"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "mint",
+        "visibility": "public",
+        "direct_calls": [
+          "_open_phase",
+          "_sell",
+          "call",
+          "mget",
+          "min",
+          "parse_ints",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "held_used",
+          "phase_minted_by"
+        ],
+        "transitive_writes": [
+          "approvals",
+          "held_used",
+          "order_offset",
+          "order_seed",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "phase_minted",
+          "phase_minted_by",
+          "token_owner",
+          "total_minted"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "mint_holder",
+        "visibility": "public",
+        "direct_calls": [
+          "_open_phase",
+          "_sell",
+          "call",
+          "mget",
+          "parse_ints",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "phase_minted_by",
+          "xpectra_used"
+        ],
+        "transitive_writes": [
+          "approvals",
+          "order_offset",
+          "order_seed",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "phase_minted",
+          "phase_minted_by",
+          "token_owner",
+          "total_minted",
+          "xpectra_used"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "airdrop",
+        "visibility": "public",
+        "direct_calls": [
+          "_mint_one",
+          "_only_owner",
+          "_reserved_now",
+          "_stir",
+          "is_address",
+          "mget",
+          "split",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "order_offset",
+          "order_seed",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner",
+          "total_minted"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "payout",
+        "visibility": "public",
+        "direct_calls": [
+          "_pay"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "approvals",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "configure_sale",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "_set_sale"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "phase_cap",
+          "phase_count",
+          "phase_end",
+          "phase_list",
+          "phase_price",
+          "phase_wallet_cap",
+          "sale_start"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "extend_phase",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "_open_phase",
+          "_shift"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "phase_end",
+          "sale_start"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_paused",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "_shift"
+        ],
+        "direct_writes": [
+          "paused_at"
+        ],
+        "transitive_writes": [
+          "paused_at",
+          "phase_end",
+          "sale_start"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_provenance",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner"
+        ],
+        "direct_writes": [
+          "provenance_hash"
+        ],
+        "transitive_writes": [
+          "provenance_hash"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_reveal",
+        "visibility": "public",
+        "direct_calls": [
+          "_is_key",
+          "_revealed",
+          "max"
+        ],
+        "direct_writes": [
+          "base_uri",
+          "reveal_epoch"
+        ],
+        "transitive_writes": [
+          "base_uri",
+          "reveal_epoch"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_unrevealed_uri",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner"
+        ],
+        "direct_writes": [
+          "unrevealed_uri"
+        ],
+        "transitive_writes": [
+          "unrevealed_uri"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "freeze_metadata",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "_revealed"
+        ],
+        "direct_writes": [
+          "metadata_frozen"
+        ],
+        "transitive_writes": [
+          "metadata_frozen"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_payout",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "assert_address"
+        ],
+        "direct_writes": [
+          "payout"
+        ],
+        "transitive_writes": [
+          "payout"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_royalty",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner"
+        ],
+        "direct_writes": [
+          "royalty_bps"
+        ],
+        "transitive_writes": [
+          "royalty_bps"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_launcher",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "assert_address"
+        ],
+        "direct_writes": [
+          "launcher",
+          "launcher_until"
+        ],
+        "transitive_writes": [
+          "launcher",
+          "launcher_until"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "propose_owner",
+        "visibility": "public",
+        "direct_calls": [
+          "_only_owner",
+          "assert_address"
+        ],
+        "direct_writes": [
+          "pending_owner"
+        ],
+        "transitive_writes": [
+          "pending_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "accept_owner",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [
+          "launcher_until",
+          "owner",
+          "payout",
+          "pending_owner"
+        ],
+        "transitive_writes": [
+          "launcher_until",
+          "owner",
+          "payout",
+          "pending_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_platform",
+        "visibility": "public",
+        "direct_calls": [
+          "assert_address"
+        ],
+        "direct_writes": [
+          "platform"
+        ],
+        "transitive_writes": [
+          "platform"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "transfer",
+        "visibility": "public",
+        "direct_calls": [
+          "_live_owner",
+          "_move_token",
+          "assert_address",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "approvals",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "transfer_from",
+        "visibility": "public",
+        "direct_calls": [
+          "_live_owner",
+          "_move_token",
+          "assert_address",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [
+          "approvals",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "approve",
+        "visibility": "public",
+        "direct_calls": [
+          "_can_approve",
+          "assert_address",
+          "to_string"
+        ],
+        "direct_writes": [
+          "approvals"
+        ],
+        "transitive_writes": [
+          "approvals"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "revoke_approval",
+        "visibility": "public",
+        "direct_calls": [
+          "_can_approve"
+        ],
+        "direct_writes": [
+          "approvals"
+        ],
+        "transitive_writes": [
+          "approvals"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_operator",
+        "visibility": "public",
+        "direct_calls": [
+          "assert_address"
+        ],
+        "direct_writes": [
+          "operator_approvals"
+        ],
+        "transitive_writes": [
+          "operator_approvals"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "burn",
+        "visibility": "public",
+        "direct_calls": [
+          "_index_remove",
+          "_live_owner",
+          "to_string"
+        ],
+        "direct_writes": [
+          "approvals",
+          "burned_count",
+          "token_owner"
+        ],
+        "transitive_writes": [
+          "approvals",
+          "burned_count",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "burn_many",
+        "visibility": "public",
+        "direct_calls": [
+          "_index_remove",
+          "_live_owner",
+          "mget",
+          "parse_ints",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "approvals",
+          "burned_count",
+          "token_owner"
+        ],
+        "transitive_writes": [
+          "approvals",
+          "burned_count",
+          "owner_token_count",
+          "owner_token_index",
+          "owner_token_position",
+          "token_owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "owner_of",
+        "visibility": "public",
+        "direct_calls": [
+          "_live_owner"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "balance_of",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "token_uri",
+        "visibility": "public",
+        "direct_calls": [
+          "_document",
+          "_live_owner",
+          "_revealed",
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "document_of",
+        "visibility": "public",
+        "direct_calls": [
+          "_document"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "creator_of",
+        "visibility": "public",
+        "direct_calls": [
+          "_live_owner"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "royalty_of",
+        "visibility": "public",
+        "direct_calls": [
+          "_live_owner"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_approved",
+        "visibility": "public",
+        "direct_calls": [
+          "_live_owner"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "is_approved_or_owner",
+        "visibility": "public",
+        "direct_calls": [
+          "_live_owner",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "total_supply",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "tokens_of",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "min",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_phase",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "mint_state",
+        "visibility": "public",
+        "direct_calls": [
+          "_now",
+          "_phase_at",
+          "_unsold_caps",
+          "concat",
+          "min",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "can_edit_lists",
+        "visibility": "public",
+        "direct_calls": [
+          "_is_key"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "unused_xpectra",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "mget",
+          "parse_ints",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "constructor",
+        "visibility": "public",
+        "direct_calls": [
+          "_set_sale",
+          "assert_address",
+          "min"
+        ],
+        "direct_writes": [
+          "base_uri",
+          "fee_bps",
+          "launcher",
+          "launcher_until",
+          "list_owner",
+          "max_supply",
+          "name",
+          "owner",
+          "payout",
+          "phase_cap",
+          "platform",
+          "provenance_hash",
+          "reveal_epoch",
+          "royalty_bps",
+          "symbol",
+          "unrevealed_uri",
+          "xlist",
+          "xpectra"
+        ],
+        "transitive_writes": [
+          "base_uri",
+          "fee_bps",
+          "launcher",
+          "launcher_until",
+          "list_owner",
+          "max_supply",
+          "name",
+          "owner",
+          "payout",
+          "phase_cap",
+          "phase_count",
+          "phase_end",
+          "phase_list",
+          "phase_price",
+          "phase_wallet_cap",
+          "platform",
+          "provenance_hash",
+          "reveal_epoch",
+          "royalty_bps",
+          "sale_start",
+          "symbol",
+          "unrevealed_uri",
+          "xlist",
+          "xpectra"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      }
+    ],
+    "invariants": [
+      {
+        "code": "supply_balance_conservation",
+        "kind": "derived",
+        "status": "not_applicable",
+        "expression": null,
+        "message": "program does not expose both balance and supply storage",
+        "fields": [],
+        "functions": []
+      }
+    ],
+    "findings": [
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "Xcollection",
+        "function_name": "mint",
+        "state_field": null,
+        "parameter": "quantity"
+      },
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "Xcollection",
+        "function_name": "transfer",
+        "state_field": null,
+        "parameter": "token_id"
+      },
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "Xcollection",
+        "function_name": "transfer_from",
+        "state_field": null,
+        "parameter": "token_id"
+      },
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "Xcollection",
+        "function_name": "burn",
+        "state_field": null,
+        "parameter": "token_id"
+      },
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "Xcollection",
+        "function_name": "get_approved",
+        "state_field": null,
+        "parameter": "token_id"
+      },
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "Xcollection",
+        "function_name": "is_approved_or_owner",
+        "state_field": null,
+        "parameter": "token_id"
+      }
+    ]
+  }
+}

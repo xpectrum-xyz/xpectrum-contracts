@@ -24,14 +24,110 @@ Standards (XNS-1, the Metadata Standard) version separately from the contracts t
 
 | Contract | Version | Address |
 |---|---|---|
+| XuperFactory | v4.0.0 | `octCzmWDXWPFWzFhjPXF3rfdeecFPNYedAoRjUyBU4rx2nz` |
+| Xcollection | v6.0.0 | deployed per collection by XuperFactory v4.0.0 |
+| Xlist | v4.0.0 | `octBnPAc1ckgGwXDDHGJcbAFtDb7ttorssqsz54epy5qiG9` |
 | Xmarket | v3.2.0 | `octGoeTjaF8MiKTP5ad5FJfWMCZmmEdnrfxTow6UUVmBj6h` |
-| XuperFactory | v2.0.0 | `octHgTcvueQE5LRb2PYLJqa5T9ypUgBuyY5XyxRstoSdBVN` |
-| Xcollection | v4.0.0 | deployed per collection by XuperFactory |
+| Xauction | v5.0.0 | `octBv5yUWMp3D5mAVcvpgC3DWgUGvH8KPMkfsSXv216LkUn` |
+| Xdutch | v2.0.0 | `octxD2gf2i6NDj3XJGBpNNNgiejnUFV1Dk45rNr5fJjN2s5` |
+| Xenglish | v1.0.0 | `oct8p3UhGRurjgbfbMERZBENuft4hcodx6DMTJj14W46ipU` |
 | XpectrumGenesis (Xpectra) | v1.0.1 | `octC4PvHrT8U1vDsZ5ejEBj6UgW2fRoLfohFBSCePdstZfQ` |
+| Xlist (Xpectra) | v2.0.0 | `oct6hqXn2kSm8HptJ3MRmRAbTaY4jvTHH2ntFcSWKdKhXzx` |
 | Xincinerator | v1.0.0 | `octGn3QwHTcGjo6Vjz5G9y8Z9hZDsYoA7gbksRqdJoaeg6q` |
 | XincineratorLog | v1.0.0 | `oct4u3PmynG2jDJADUF1iVTwPA8oxNy2LQTYNKueGdPN3zh` |
 
+Superseded and still deployed: XuperFactory v2.0.0 at `octHgTcvueQE5LRb2PYLJqa5T9ypUgBuyY5XyxRstoSdBVN`, with the Xcollection v4.0.0 it deploys.
 `XNS1.aml` is the reference implementation and is not deployed.
+
+---
+
+## Source documentation
+
+**2026-10-30.** No bytecode change.
+
+Every source in this repository now carries Prism documentation: a header stating the contract's model, custody, payout, privacy and units, and a block on every public function stating who may call it, what it pays, what it holds, what it makes public, what it logs, and each parameter and return.
+Comments do not change bytecode.
+Each restyled source was compiled on mainnet before and after, and the bytecode hash, ABI and verifier report are identical; for every deployed contract the hash also equals the code running on chain.
+
+The two superseded contracts in `contracts/legacy/` are kept exactly as first published.
+
+The layout moved from one `contracts/` folder to `standard/`, `launch/`, `market/`, `xpectra/` and `legacy/`, with `verification/` mirroring it.
+`deployments.json` is new, and `scripts/verify.sh --live` checks every deployed contract against the chain.
+
+---
+
+## XuperFactory v4.0.0, Xcollection v6.0.0 and Xlist v4.0.0
+
+**2026-10-24, mainnet.** Breaking. A rewrite of the launch path; nothing in it is compatible with XuperFactory v2.0.0 or Xcollection v4.0.0.
+
+### What changes for callers
+- `create_collection` takes fifteen arguments, starting with the tag `"xf6"`, and the collection receives every setting in its constructor. There is no `init` and no setup transaction afterwards.
+- The caller must be the `creator` argument, and must attach exactly the launch fee plus the launch budget. The budget is forwarded to the launch key.
+- New factory views `collection_by_creator` and `collection_by_launcher`. Ownership of the factory moves in two steps, `propose_ownership` then `accept_ownership`.
+- The sale is a table of phases: the Xpectra holder phase first, up to four listed phases, and public last. `get_phase(n)` and `mint_state(wallet)` replace `get_phase_info`, `get_wallet_state` and `get_xholder_status`.
+- `mint(quantity, code)` mints up to 100 at a time and requires the exact price; there is no refund path. Holders of Xpectra claim with `mint_holder(ids)`.
+- A paid mint sends the 2.5% platform fee and the proceeds in the same transaction. `claim_proceeds`, `pending_proceeds`, `reserve` and `sweep_unaccounted` are removed.
+- The reveal is an epoch set with `set_reveal`; `token_uri` switches by itself. `freeze_metadata` locks it.
+- `burn_many(ids)` burns 1 to 100 of the caller's own tokens in one transaction.
+- Ownership of a collection moves in two steps, `propose_owner` then `accept_owner`.
+- The hand-rolled event log, `get_contract_info`, `get_tokens_page` and the phase override are removed. State is read by name, and events are real events.
+- Allowlists move from one Xlist per collection to a single shared Xlist. A list is named by its owner's address and a number, and a collection owns its own lists; `is_member(owner, list_id, who, code)` answers membership. A list may store digests rather than addresses, or be a holder list that admits anyone holding a token of a given collection.
+
+### What changes for creators
+- Launching costs 1 OCT, as before, and the collection is usable the moment the creation transaction lands.
+- The Xpectra holder cap is a ceiling on phase 0, not an allocation. Nothing is swept and nothing needs releasing.
+- A phase may be priced at zero; a collection is either free in every phase or paid in every phase.
+
+### Hashes
+
+| Contract | Chain | bytecode_hash |
+|---|---|---|
+| XuperFactory | mainnet | `978a7ec7…` |
+| Xcollection | mainnet | `2eafd458…` |
+| Xcollection | devnet | `977dcc4a…` |
+| Xlist | mainnet | `4a20afd1…` |
+
+---
+
+## Xauction v5.0.0, Xdutch v2.0.0 and Xenglish v1.0.0
+
+**2026-09-25, mainnet.** First publication in this repository. Earlier versions of Xauction and Xdutch reached devnet only and are not published.
+
+All three escrow the token in the contract from listing until it sells or is reclaimed, take the 2.5% market fee and pay the collection's royalty at settlement, credit proceeds and refunds inside the contract for `claim_proceeds`, and can restrict buyers to a hashed allowlist loaded with `add_allow`.
+
+### Xauction v5.0.0
+- Sealed bids in three windows: bidding, posting and payment, each in epochs.
+- A bid is a commitment with a bond. The amount stays hidden until the bidder, or anyone holding the opening, posts it with `post_bid` or `post_bid_for`, so a bid can settle with its bidder offline.
+- The posting window is at least 2,144 epochs and the payment window at least 8,575.
+- The highest posted bid at or above `min_bid` wins and pays its own price with `pay`.
+- A winner who does not pay before the deadline forfeits the bond to the seller, and the runner-up is offered the token at their own bid. With no runner-up the auction is void and the seller reclaims the token.
+- A bid that is never posted forfeits its bond to the seller.
+- `min_bid` is the only price constraint. There is no reserve.
+
+### Xdutch v2.0.0
+- The price falls by a fixed step each epoch from a start price to a floor, and the first buyer at the current price takes the token.
+- Only the buyer sends a transaction, so a bidder who walks away leaves no record on chain.
+- `get_sale` returns twelve pipe-separated fields.
+
+### Xenglish v1.0.0
+- Open ascending bids. Each bid must clear the previous one by the auction's increment, between 1% and 50%.
+- A bid in the last 30 epochs moves the close to 30 epochs after that bid.
+- An outbid bid is credited back to its bidder, who can withdraw it or bid it again.
+
+### Hashes
+
+| Contract | Chain | bytecode_hash |
+|---|---|---|
+| Xauction | mainnet | `8cafcdef…` |
+| Xdutch | mainnet | `9eb708c2…` |
+| Xenglish | mainnet | `c0f1f9dc…` |
+
+---
+
+## Xlist v2.0.0
+
+**First publication of the source.** The contract has been on mainnet since the Xpectra mint as `oct6hqXn2kSm8HptJ3MRmRAbTaY4jvTHH2ntFcSWKdKhXzx`, and XuperFactory v2.0.0 embeds the same bytecode.
+Its compiled form was always public inside the factory; the source now sits beside it and compiles to the same hash, `57b1c272…`.
 
 ---
 

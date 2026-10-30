@@ -1,0 +1,1029 @@
+// SPDX-License-Identifier: FSL-1.1-MIT
+
+//| Xcollection
+//| An NFT collection with its own sale, born configured by XuperFactory.
+//|
+//| model    one supply counter and a forward-only run of phases: Xpectra holders first, any listed phases, public last
+//| model    the sale's lists are this contract's own lists in Xlist, edited by whoever can_edit_lists admits
+//| model    the launch key may schedule the reveal and edit the lists until it expires, and nothing else
+//| model    token n shows document (n + order_offset) mod max_supply; every mint before the reveal redraws the offset, so it is unknown until the reveal and 0 for a collection revealed before its first mint
+//| custody  tokens are held by their owners, and the contract keeps no OCT between calls
+//| payout   every paid mint sends the platform fee and the proceeds on in the same transaction
+//| privacy  nothing is private: owners, mints, prices and every setting are public
+//| units    amounts in micro-OCT (1 OCT = 1,000,000), time in epochs, token ids from 0
+//| version  6.0.0
+//| license  FSL-1.1-MIT, MIT from 2028-10-30
+
+interface IXNS1 {
+  fn owner_of(token_id: u128): string
+  fn balance_of(addr: address): u128
+  fn token_uri(token_id: u128): string
+  fn creator_of(token_id: u128): address
+  fn royalty_of(token_id: u128): u128
+  fn get_approved(token_id: u128): string
+  fn is_approved_or_owner(token_id: u128, addr: address): u128
+  fn total_supply(): u128
+  fn transfer(to: address, token_id: u128): bool
+  fn transfer_from(from: address, to: address, token_id: u128): bool
+  fn approve(approved: address, token_id: u128): bool
+  fn revoke_approval(token_id: u128): bool
+  fn set_operator(operator: address, approved: u128): bool
+  fn burn(token_id: u128): bool
+}
+
+interface IXSale {
+  fn mint(quantity: u128, code: string): bool
+  fn mint_holder(ids: string): bool
+  fn mint_state(wallet: address): string
+  fn get_phase(phase: u128): string
+  fn can_edit_lists(who: address): u128
+}
+
+contract Xcollection implements IXNS1, IXSale {
+
+  event Initialized(owner: address, name: string, max_supply: u128, holder_cap: u128)
+  event SaleSet(start: u128, phases: u128)
+  event PhaseSet(phase: u128, end: u128, price: u128, cap: u128, wallet_cap: u128, list_id: u128)
+  event ScheduleMoved(from_epoch: u128, by: u128)
+  event Paused(paused: u128)
+  event Minted(minter: string, token_id: u128, phase: u128, price: u128)
+  event HolderClaim(minter: string, xpectra_id: u128)
+  event Paid(fee: u128, proceeds: u128)
+  event Transferred(token_id: u128, from: string, to: string)
+  event Burned(token_id: u128, owner: string, total_supply: u128)
+  event Approved(token_id: u128, approved: string)
+  event ApprovalRevoked(token_id: u128)
+  event OperatorSet(owner: address, operator: address, approved: u128)
+  event ProvenanceSet(hash: string)
+  event RevealSet(base_uri: string, at_epoch: u128)
+  event UnrevealedUriSet(uri: string)
+  event MetadataFrozen()
+  event PayoutSet(payout: address)
+  event RoyaltySet(bps: u128)
+  event LauncherSet(launcher: address, until_epoch: u128)
+  event OwnerProposed(proposed: address)
+  event OwnershipTransferred(old_owner: address, new_owner: address)
+  event PlatformSet(platform: address)
+
+  const HOLDERS: u128           = 0
+  const CLOSED: u128            = 99
+  const AIRDROP: u128           = 255
+  const MAX_PHASES: u128        = 6
+  const HOLDER_BPS: u128        = 2000
+  const MAX_HOLDER_CAP: u128    = 111
+  const MIN_HOLDER_EPOCHS: u128 = 360
+  const MAX_EXTEND: u128        = 60480
+  const FEE_BPS: u128           = 250
+  const MAX_ROYALTY_BPS: u128   = 1000
+  const MAX_BATCH: u128         = 100
+  const MAX_PAGE: u128          = 500
+  const SPLIT_BASE: u128        = 100
+  const PARSE_BASE: u128        = 300
+  const HEX: string             = "0123456789abcdef"
+
+  state {
+    owner: address
+    pending_owner: address
+    launcher: address
+    launcher_until: u128
+    platform: address
+    payout: address
+    xlist: address
+    list_owner: address
+    xpectra: address
+    name: string
+    symbol: string
+    unrevealed_uri: string
+    base_uri: string
+    reveal_epoch: u128
+    metadata_frozen: u128
+    provenance_hash: string
+    order_seed: string
+    order_offset: u128
+    royalty_bps: u128
+    fee_bps: u128
+    max_supply: u128
+    total_minted: u128
+    burned_count: u128
+    paused_at: u128
+    sale_start: u128
+    phase_count: u128
+    phase_end: map[u128]u128
+    phase_price: map[u128]u128
+    phase_cap: map[u128]u128
+    phase_wallet_cap: map[u128]u128
+    phase_list: map[u128]u128
+    phase_minted: map[u128]u128
+    phase_minted_by: map[u128]map[address]u128
+    xpectra_used: map[u128]u128
+    held_used: map[u128]map[u128]u128
+    token_owner: map[u128]string
+    approvals: map[u128]string
+    operator_approvals: map[address]map[address]u128
+    owner_token_index: map[address]map[u128]u128
+    owner_token_position: map[address]map[u128]u128
+    owner_token_count: map[address]u128
+  }
+
+  constructor(
+    collection_name: string,
+    collection_symbol: string,
+    supply: u128,
+    royalty: u128,
+    placeholder_uri: string,
+    provenance: string,
+    revealed_uri: string,
+    reveal_at: u128,
+    sale: string,
+    creator: address,
+    payout_to: address,
+    launch_key: address,
+    launch_key_until: u128,
+    platform_wallet: address,
+    xlist_addr: address,
+    xpectra_addr: address
+  ) {
+    assert_address(creator)
+    assert_address(payout_to)
+    assert_address(launch_key)
+    assert_address(platform_wallet)
+    assert_address(xlist_addr)
+    assert_address(xpectra_addr)
+    require(supply > 0, "xcollection: supply must be above zero")
+    require(royalty <= MAX_ROYALTY_BPS, "xcollection: royalty is at most 10 percent")
+
+    let cap: u128 = min(supply * HOLDER_BPS / 10000, MAX_HOLDER_CAP)
+
+    self.owner = creator
+    self.payout = payout_to
+    self.launcher = launch_key
+    self.launcher_until = launch_key_until
+    self.list_owner = self_addr
+    self.platform = platform_wallet
+    self.xlist = xlist_addr
+    self.xpectra = xpectra_addr
+    self.name = collection_name
+    self.symbol = collection_symbol
+    self.unrevealed_uri = placeholder_uri
+    self.base_uri = revealed_uri
+    self.provenance_hash = provenance
+    self.max_supply = supply
+    self.royalty_bps = royalty
+    self.fee_bps = FEE_BPS
+    self.phase_cap[HOLDERS] = cap
+
+    if reveal_at > 0 {
+      require(provenance != "" && revealed_uri != "", "xcollection: a reveal needs the provenance hash and the revealed uri")
+      self.reveal_epoch = reveal_at
+    }
+    if sale != "" { _set_sale(sale) }
+
+    emit Initialized(creator, collection_name, supply, cap)
+  }
+
+  private fn _is_key(who: address): u128 {
+    if who == self.launcher && epoch < self.launcher_until { return 1 }
+    return 0
+  }
+
+  private fn _only_owner() {
+    require(caller == self.owner, "xcollection: only the owner")
+  }
+
+  private fn _now(): u128 {
+    if self.paused_at > 0 { return self.paused_at }
+    return epoch
+  }
+
+  private fn _phase_at(at: u128): u128 {
+    let n: u128 = self.phase_count
+    if n == 0 || at < self.sale_start { return CLOSED }
+    for i in 0..n {
+      if at < self.phase_end[i] { return i }
+    }
+    return CLOSED
+  }
+
+  private fn _open_phase(): u128 {
+    require(self.paused_at == 0, "xcollection: the sale is paused")
+    let p: u128 = _phase_at(epoch)
+    require(p < CLOSED, "xcollection: no phase is open")
+    return p
+  }
+
+  private fn _shift(at: u128, by: u128) {
+    if self.sale_start > at { self.sale_start += by }
+    let n: u128 = self.phase_count
+    for i in 0..n {
+      if self.phase_end[i] > at { self.phase_end[i] += by }
+    }
+    emit ScheduleMoved(at, by)
+  }
+
+  private fn _holders_left(): u128 {
+    if self.phase_count > 0 && _now() >= self.phase_end[HOLDERS] { return 0 }
+    return self.phase_cap[HOLDERS] - self.phase_minted[HOLDERS]
+  }
+
+  private fn _unsold_caps(first: u128): u128 {
+    let n: u128 = self.phase_count
+    let held: u128 = 0
+    if first >= n { return 0 }
+    for i in first..n {
+      if i > HOLDERS && self.phase_cap[i] > 0 { held += self.phase_cap[i] - self.phase_minted[i] }
+    }
+    return held
+  }
+
+  private fn _reserved_now(): u128 {
+    let at: u128 = _now()
+    let first: u128 = 1
+    if self.phase_count > 0 && at >= self.sale_start {
+      let p: u128 = _phase_at(at)
+      first = self.phase_count
+      if p < CLOSED { first = max(p, 1) }
+    }
+    return _holders_left() + _unsold_caps(first)
+  }
+
+  private fn _revealed(): u128 {
+    if self.reveal_epoch > 0 && epoch >= self.reveal_epoch { return 1 }
+    return 0
+  }
+
+  private fn _stir() {
+    if _revealed() == 0 {
+      let seed: string = sha256(concat(concat(self.order_seed, current_tx_hash()), tree_hash))
+      let n: u128 = 0
+      let digits: u128 = 12
+      for i in 0..digits { n = n * 16 + to_int(index_of(HEX, substr(seed, i, 1))) }
+      self.order_seed = seed
+      self.order_offset = n % self.max_supply
+    }
+  }
+
+  private fn _document(token_id: u128): u128 {
+    return (token_id + self.order_offset) % self.max_supply
+  }
+
+  private fn _set_sale(numbers: string) {
+    let k: u128 = to_int(to_string(parse_ints(numbers, PARSE_BASE)))
+    let n: u128 = (k - 1) / 5
+    require(k == n * 5 + 1 && n >= 2 && n <= MAX_PHASES, "xcollection: a sale is a start epoch then 2 to 6 phases of 5 numbers")
+
+    let start: u128 = to_int(mget(PARSE_BASE))
+    let late: u128 = 0
+    if start < epoch {
+      late = epoch - start
+      start = epoch
+    }
+
+    let prev_end: u128 = start
+    let prev_price: u128 = 0
+    let reserved: u128 = self.phase_cap[HOLDERS] + self.total_minted
+    for i in 0..n {
+      let at: u128 = PARSE_BASE + 1 + i * 5
+      let end: u128 = to_int(mget(at)) + late
+      let price: u128 = to_int(mget(at + 1))
+      let cap: u128 = to_int(mget(at + 2))
+      let wallet_cap: u128 = to_int(mget(at + 3))
+      let lid: u128 = to_int(mget(at + 4))
+
+      require(end > prev_end, "xcollection: each phase must end after the one before it")
+      if i == HOLDERS {
+        require(cap == 0 && lid == 0, "xcollection: the holders phase takes no cap and no list")
+        require(wallet_cap <= 1, "xcollection: holders wallet cap is 0 for one mint per Xpectra or 1 for one per wallet")
+        require(wallet_cap == 0 || self.phase_cap[HOLDERS] < MAX_HOLDER_CAP, "xcollection: one per wallet needs a holder cap below 111")
+        require(self.phase_cap[HOLDERS] == 0 || end - start >= MIN_HOLDER_EPOCHS, "xcollection: the holders phase runs at least 360 epochs")
+      } else {
+        require(wallet_cap > 0, "xcollection: a phase needs a wallet cap above zero")
+        if i == 1 {
+          require(price > prev_price || price + prev_price == 0, "xcollection: the phase after holders must cost more than the holders price")
+        } else {
+          require(price >= prev_price, "xcollection: a phase cannot cost less than the one before it")
+        }
+        reserved += cap
+        self.phase_cap[i] = cap
+      }
+      if i == n - 1 {
+        require(cap == 0 && lid == 0, "xcollection: the last phase is public, with no cap and no list")
+      }
+
+      self.phase_end[i] = end
+      self.phase_price[i] = price
+      self.phase_wallet_cap[i] = wallet_cap
+      self.phase_list[i] = lid
+      emit PhaseSet(i, end, price, cap, wallet_cap, lid)
+
+      prev_end = end
+      prev_price = price
+    }
+    require(self.phase_price[1] > 0 || prev_price == 0, "xcollection: a free sale is free in every phase")
+    require(reserved <= self.max_supply, "xcollection: the holder cap plus the phase caps exceed what is left to mint")
+
+    self.sale_start = start
+    self.phase_count = n
+    emit SaleSet(start, n)
+  }
+
+  private fn _index_add(to: string, token_id: u128) {
+    let idx: u128 = self.owner_token_count[to]
+    self.owner_token_index[to][idx] = token_id
+    self.owner_token_position[to][token_id] = idx
+    self.owner_token_count[to] = idx + 1
+  }
+
+  private fn _index_remove(from: string, token_id: u128) {
+    let pos: u128 = self.owner_token_position[from][token_id]
+    let last_idx: u128 = self.owner_token_count[from] - 1
+    if pos != last_idx {
+      let last_token: u128 = self.owner_token_index[from][last_idx]
+      self.owner_token_index[from][pos] = last_token
+      self.owner_token_position[from][last_token] = pos
+    }
+    self.owner_token_position[from][token_id] = 0
+    self.owner_token_count[from] = last_idx
+  }
+
+  private fn _mint_one(to: string, phase: u128, price: u128) {
+    let tid: u128 = self.total_minted
+    self.total_minted = tid + 1
+    self.token_owner[tid] = to
+    _index_add(to, tid)
+    emit Minted(to, tid, phase, price)
+  }
+
+  private fn _move_token(from: string, to: string, token_id: u128) {
+    self.token_owner[token_id] = to
+    self.approvals[token_id] = "0"
+    _index_remove(from, token_id)
+    _index_add(to, token_id)
+    emit Transferred(token_id, from, to)
+  }
+
+  private fn _live_owner(token_id: u128): string {
+    require(token_id < self.total_minted, "xcollection: token not found")
+    let current: string = self.token_owner[token_id]
+    require(current != "0", "xcollection: token burned")
+    return current
+  }
+
+  private fn _can_approve(token_id: u128) {
+    let current: string = _live_owner(token_id)
+    require(
+      current == to_string(caller) || self.operator_approvals[current][caller] == 1,
+      "xcollection: only the token owner or their operator"
+    )
+  }
+
+  private fn _pay() {
+    let held: u128 = balance(self_addr)
+    if held > 0 {
+      let fee: u128 = held * self.fee_bps / 10000
+      require(transfer(self.platform, fee), "xcollection: fee transfer failed")
+      require(transfer(self.payout, held - fee), "xcollection: payout transfer failed")
+      emit Paid(fee, held - fee)
+    }
+  }
+
+  private fn _sell(phase: u128, quantity: u128) {
+    require(quantity > 0 && quantity <= MAX_BATCH, "xcollection: mint 1 to 100 at a time")
+    let price: u128 = self.phase_price[phase]
+    require(value == price * quantity, "xcollection: send exactly the mint price")
+
+    let sold: u128 = self.phase_minted[phase] + quantity
+    let cap: u128 = self.phase_cap[phase]
+    require((phase > HOLDERS && cap == 0) || sold <= cap, "xcollection: this phase is sold out")
+    require(self.total_minted + quantity <= self.max_supply, "xcollection: sold out")
+    require(self.total_minted + quantity + _unsold_caps(phase + 1) <= self.max_supply, "xcollection: the rest is reserved for later phases")
+    self.phase_minted[phase] = sold
+    _stir()
+
+    let to: string = to_string(caller)
+    for i in 0..quantity { _mint_one(to, phase, price) }
+    _pay()
+  }
+
+  //| Mint in the open phase after holders.
+  //|
+  //| who      anyone in a public phase; in a listed phase a wallet the phase list admits
+  //| pays     exactly price times quantity, sent on at once: the platform fee to the platform, the rest to the payout address
+  //| when     while a phase after holders is open and the sale is not paused
+  //| holds    each new token goes to the caller; on a holder list each named token mints once per phase, whoever holds it
+  //| reveals  the caller, the quantity, the price paid and the list code used
+  //| logs     Minted(minter, token_id, phase, price) per token, Paid(fee, proceeds) when OCT moved
+  //| in       quantity  tokens to mint, 1 to 100, within the wallet's limit for the phase
+  //| in       code      the caller's code for the phase list, comma-separated token ids held on a holder list, or empty
+  //| out      true
+  payable fn mint(quantity: u128, code: string): bool {
+    let p: u128 = _open_phase()
+    require(p > HOLDERS, "xcollection: the holders phase is open, use mint_holder")
+
+    let limit: u128 = self.phase_wallet_cap[p]
+    let lid: u128 = self.phase_list[p]
+    if lid > 0 {
+      if to_int(call(self.xlist, "is_holder_list", self.list_owner, lid)) == 1 {
+        let n: u128 = to_int(to_string(parse_ints(code, PARSE_BASE)))
+        require(n == quantity, "xcollection: name one held token per mint in code")
+        require(n > 0 && n <= MAX_BATCH, "xcollection: mint 1 to 100 at a time")
+        for i in 0..n {
+          let held: u128 = to_int(mget(PARSE_BASE + i))
+          require(self.held_used[p][held] == 0, "xcollection: this token has already minted in this phase")
+          self.held_used[p][held] = 1
+          let ok: u128 = to_int(call(self.xlist, "is_member", self.list_owner, lid, caller, to_string(held)))
+          require(ok > 0, "xcollection: you do not hold a token named in code")
+        }
+      } else {
+        let allowed: u128 = to_int(call(self.xlist, "is_member", self.list_owner, lid, caller, code))
+        require(allowed > 0, "xcollection: not on the list for this phase")
+        limit = min(limit, allowed)
+      }
+    }
+    let used: u128 = self.phase_minted_by[p][caller] + quantity
+    require(used <= limit, "xcollection: over your limit for this phase")
+    self.phase_minted_by[p][caller] = used
+
+    _sell(p, quantity)
+    return true
+  }
+
+  //| Mint in the holders phase, one token per Xpectra presented.
+  //|
+  //| who      the current owner of every Xpectra id presented
+  //| pays     exactly the holders price times the number of ids, sent on as in mint
+  //| when     while the holders phase is open and the sale is not paused
+  //| holds    each new token goes to the caller
+  //| reveals  the caller and the Xpectra ids, each of which can never claim in this collection again
+  //| logs     HolderClaim(minter, xpectra_id) per id, Minted per token, Paid when OCT moved
+  //| in       ids  comma-separated Xpectra token ids the caller owns; exactly one when the phase is one per wallet
+  //| out      true
+  payable fn mint_holder(ids: string): bool {
+    let p: u128 = _open_phase()
+    require(p == HOLDERS, "xcollection: the holders phase is over")
+
+    let n: u128 = to_int(to_string(parse_ints(ids, PARSE_BASE)))
+    require(n > 0 && n <= MAX_BATCH, "xcollection: mint 1 to 100 at a time")
+    let used: u128 = self.phase_minted_by[HOLDERS][caller] + n
+    require(self.phase_wallet_cap[HOLDERS] == 0 || used <= 1, "xcollection: one holder mint per wallet")
+    self.phase_minted_by[HOLDERS][caller] = used
+
+    let me: string = to_string(caller)
+    for i in 0..n {
+      let id: u128 = to_int(mget(PARSE_BASE + i))
+      require(self.xpectra_used[id] == 0, "xcollection: this Xpectra has already claimed")
+      self.xpectra_used[id] = 1
+      let holder: string = call(self.xpectra, "owner_of", id)
+      require(holder == me, "xcollection: you do not own this Xpectra")
+      emit HolderClaim(me, id)
+    }
+
+    _sell(HOLDERS, n)
+    return true
+  }
+
+  //| Mint free tokens to a list of wallets.
+  //|
+  //| who      the owner
+  //| when     any time; the unclaimed holder cap and the unsold caps of listed phases still to come stay out of reach
+  //| holds    one new token to each recipient
+  //| reveals  every recipient
+  //| logs     Minted(recipient, token_id, 255, 0) per token
+  //| in       recipients  comma-separated addresses, 1 to 100
+  //| out      the number minted
+  fn airdrop(recipients: string): u128 {
+    _only_owner()
+    let n: u128 = to_int(to_string(split(recipients, ",")))
+    require(n > 0 && n <= MAX_BATCH, "xcollection: airdrop 1 to 100 at a time")
+    require(self.total_minted + n + _reserved_now() <= self.max_supply, "xcollection: not enough supply outside the reserved caps")
+    _stir()
+
+    for i in 0..n {
+      let one: string = to_string(mget(SPLIT_BASE + i))
+      require(is_address(one), "xcollection: invalid recipient address")
+      _mint_one(one, AIRDROP, 0)
+    }
+    return n
+  }
+
+  //| Send any OCT the contract holds to the platform and the payout address, split as a mint is.
+  //|
+  //| who      anyone
+  //| pays     the whole balance out: the platform fee to the platform, the rest to the payout address
+  //| logs     Paid(fee, proceeds) when OCT moved
+  //| out      true
+  fn payout(): bool {
+    _pay()
+    return true
+  }
+
+  //| Set or replace the whole sale.
+  //|
+  //| who      the owner
+  //| when     before the holders phase opens, and not while paused
+  //| holds    a start already passed when this runs becomes the current epoch, and every phase end moves by the same amount
+  //| logs     PhaseSet(phase, end, price, cap, wallet_cap, list) per phase, SaleSet(start, phases)
+  //| in       numbers  comma-separated: the start epoch, then end, price, cap, wallet_cap, list for each phase in order
+  //| out      true
+  fn configure_sale(numbers: string): bool {
+    _only_owner()
+    require(self.paused_at == 0, "xcollection: the sale is paused")
+    require(self.phase_count == 0 || epoch < self.sale_start, "xcollection: the sale is locked once the holders phase opens")
+    _set_sale(numbers)
+    return true
+  }
+
+  //| Push the end of the open phase, and every phase after it, later.
+  //|
+  //| who      the owner
+  //| when     while a phase is open and the sale is not paused
+  //| logs     ScheduleMoved(from_epoch, by)
+  //| in       by  epochs to add, 1 to 60480
+  //| out      true
+  fn extend_phase(by: u128): bool {
+    _only_owner()
+    _open_phase()
+    require(by > 0 && by <= MAX_EXTEND, "xcollection: extend by 1 to 60480 epochs")
+    _shift(epoch, by)
+    return true
+  }
+
+  //| Pause or resume the sale. The schedule stops while paused and resumes where it stopped.
+  //|
+  //| who      the owner
+  //| logs     Paused(paused), and ScheduleMoved(from_epoch, by) on resume
+  //| in       flag  1 to pause, 0 to resume
+  //| out      true
+  fn set_paused(flag: u128): bool {
+    _only_owner()
+    if flag == 1 {
+      require(self.paused_at == 0, "xcollection: already paused")
+      self.paused_at = epoch
+    } else {
+      require(flag == 0 && self.paused_at > 0, "xcollection: not paused")
+      _shift(self.paused_at, epoch - self.paused_at)
+      self.paused_at = 0
+    }
+    emit Paused(flag)
+    return true
+  }
+
+  //| Commit the provenance hash.
+  //|
+  //| who      the owner
+  //| when     until the first token is minted
+  //| logs     ProvenanceSet(hash)
+  //| in       hash  the commitment to the final art and metadata
+  //| out      true
+  fn set_provenance(hash: string): bool {
+    _only_owner()
+    require(self.total_minted == 0, "xcollection: the provenance hash is permanent after the first mint")
+    require(hash != "", "xcollection: the hash cannot be empty")
+    self.provenance_hash = hash
+    emit ProvenanceSet(hash)
+    return true
+  }
+
+  //| Set where revealed metadata lives and the epoch it takes effect.
+  //|
+  //| who      the owner, or the launch key before it expires while the collection is unrevealed
+  //| when     before the metadata is frozen, and once the provenance hash is set if nothing has been minted
+  //| logs     RevealSet(base_uri, at_epoch)
+  //| in       uri  the base uri; a token resolves to uri + document_of(id) + ".json"
+  //| in       at   the reveal epoch, or 0 for now; once revealed it cannot move into the future
+  //| out      true
+  fn set_reveal(uri: string, at: u128): bool {
+    require(caller == self.owner || (_is_key(caller) == 1 && _revealed() == 0), "xcollection: only the owner, or the launch key before the reveal")
+    require(self.metadata_frozen == 0, "xcollection: metadata is frozen")
+    require(self.provenance_hash != "" || self.total_minted > 0, "xcollection: set the provenance hash before the reveal")
+    require(uri != "", "xcollection: the base uri cannot be empty")
+    let when: u128 = max(at, 1)
+    if at == 0 { when = epoch }
+    require(_revealed() == 0 || when <= epoch, "xcollection: a revealed collection cannot be hidden again")
+    self.base_uri = uri
+    self.reveal_epoch = when
+    emit RevealSet(uri, when)
+    return true
+  }
+
+  //| Set the placeholder metadata shown before the reveal.
+  //|
+  //| who      the owner
+  //| when     before the metadata is frozen
+  //| logs     UnrevealedUriSet(uri)
+  //| in       uri  the placeholder document every token resolves to until the reveal
+  //| out      true
+  fn set_unrevealed_uri(uri: string): bool {
+    _only_owner()
+    require(self.metadata_frozen == 0, "xcollection: metadata is frozen")
+    self.unrevealed_uri = uri
+    emit UnrevealedUriSet(uri)
+    return true
+  }
+
+  //| Freeze the metadata for good.
+  //|
+  //| who      the owner
+  //| when     after the reveal
+  //| logs     MetadataFrozen()
+  //| out      true
+  fn freeze_metadata(): bool {
+    _only_owner()
+    require(_revealed() == 1, "xcollection: reveal before freezing")
+    self.metadata_frozen = 1
+    emit MetadataFrozen()
+    return true
+  }
+
+  //| Set where mint proceeds and royalties are paid.
+  //|
+  //| who      the owner
+  //| logs     PayoutSet(payout)
+  //| in       to  the new payout address
+  //| out      true
+  fn set_payout(to: address): bool {
+    _only_owner()
+    assert_address(to)
+    self.payout = to
+    emit PayoutSet(to)
+    return true
+  }
+
+  //| Lower the royalty.
+  //|
+  //| who      the owner
+  //| logs     RoyaltySet(bps)
+  //| in       bps  the new royalty in basis points, below the current one
+  //| out      true
+  fn set_royalty(bps: u128): bool {
+    _only_owner()
+    require(bps < self.royalty_bps, "xcollection: the royalty can only go down")
+    self.royalty_bps = bps
+    emit RoyaltySet(bps)
+    return true
+  }
+
+  //| Name the launch key and when it expires.
+  //|
+  //| who      the owner
+  //| logs     LauncherSet(launcher, until_epoch)
+  //| in       key    the address allowed to do setup on the owner's behalf
+  //| in       until  the epoch its rights end; 0 ends them now
+  //| out      true
+  fn set_launcher(key: address, until: u128): bool {
+    _only_owner()
+    assert_address(key)
+    self.launcher = key
+    self.launcher_until = until
+    emit LauncherSet(key, until)
+    return true
+  }
+
+  //| Offer ownership to another address.
+  //|
+  //| who      the owner
+  //| logs     OwnerProposed(proposed)
+  //| in       proposed  the address that may accept
+  //| out      true
+  fn propose_owner(proposed: address): bool {
+    _only_owner()
+    assert_address(proposed)
+    self.pending_owner = proposed
+    emit OwnerProposed(proposed)
+    return true
+  }
+
+  //| Accept an ownership offer.
+  //|
+  //| who      the proposed owner, while an offer is open
+  //| holds    the offer is spent, proceeds and royalties now go to the new owner, and the launch key loses its rights
+  //| logs     OwnershipTransferred(old_owner, new_owner), PayoutSet(payout), LauncherSet(launcher, 0)
+  //| out      true
+  fn accept_owner(): bool {
+    require(caller == self.pending_owner, "xcollection: only the proposed owner")
+    require(caller != self.owner, "xcollection: no ownership offer is open")
+    let old: address = self.owner
+    self.owner = caller
+    self.pending_owner = caller
+    self.payout = caller
+    self.launcher_until = 0
+    emit OwnershipTransferred(old, caller)
+    emit PayoutSet(caller)
+    emit LauncherSet(self.launcher, 0)
+    return true
+  }
+
+  //| Move the platform fee address.
+  //|
+  //| who      the platform address
+  //| logs     PlatformSet(platform)
+  //| in       to  the new platform address
+  //| out      true
+  fn set_platform(to: address): bool {
+    require(caller == self.platform, "xcollection: only the platform")
+    assert_address(to)
+    self.platform = to
+    emit PlatformSet(to)
+    return true
+  }
+
+  //| Send a token to another address.
+  //|
+  //| who      the token owner
+  //| holds    the token moves to the recipient and its approval is cleared
+  //| reveals  the sender, the recipient and the token
+  //| logs     Transferred(token_id, from, to)
+  //| in       to        the recipient
+  //| in       token_id  the token
+  //| out      true
+  fn transfer(to: address, token_id: u128): bool {
+    assert_address(to)
+    let current: string = _live_owner(token_id)
+    require(current == to_string(caller), "xcollection: not the token owner")
+    require(to_string(to) != current, "xcollection: already the owner")
+    _move_token(current, to_string(to), token_id)
+    return true
+  }
+
+  //| Move a token on its owner's behalf.
+  //|
+  //| who      the token owner, the address approved for the token, or an operator of the owner
+  //| holds    the token moves to the recipient and its approval is cleared
+  //| reveals  the caller, the sender, the recipient and the token
+  //| logs     Transferred(token_id, from, to)
+  //| in       from      the current owner
+  //| in       to        the recipient
+  //| in       token_id  the token
+  //| out      true
+  fn transfer_from(from: address, to: address, token_id: u128): bool {
+    assert_address(to)
+    let current: string = _live_owner(token_id)
+    require(to_string(from) == current, "xcollection: from is not the token owner")
+    require(to_string(to) != current, "xcollection: already the owner")
+    let me: string = to_string(caller)
+    require(
+      current == me || self.approvals[token_id] == me || self.operator_approvals[from][caller] == 1,
+      "xcollection: not approved for this token"
+    )
+    _move_token(current, to_string(to), token_id)
+    return true
+  }
+
+  //| Approve one address to move one token.
+  //|
+  //| who      the token owner or their operator
+  //| logs     Approved(token_id, approved)
+  //| in       approved  the address allowed to move the token
+  //| in       token_id  the token
+  //| out      true
+  fn approve(approved: address, token_id: u128): bool {
+    assert_address(approved)
+    _can_approve(token_id)
+    self.approvals[token_id] = to_string(approved)
+    emit Approved(token_id, to_string(approved))
+    return true
+  }
+
+  //| Clear a token's approval.
+  //|
+  //| who      the token owner or their operator
+  //| logs     ApprovalRevoked(token_id)
+  //| in       token_id  the token
+  //| out      true
+  fn revoke_approval(token_id: u128): bool {
+    _can_approve(token_id)
+    self.approvals[token_id] = "0"
+    emit ApprovalRevoked(token_id)
+    return true
+  }
+
+  //| Allow or stop an address moving all of the caller's tokens.
+  //|
+  //| who      anyone, for their own tokens
+  //| logs     OperatorSet(owner, operator, approved)
+  //| in       operator  the address
+  //| in       approved  1 to allow, 0 to stop
+  //| out      true
+  fn set_operator(operator: address, approved: u128): bool {
+    assert_address(operator)
+    require(operator != caller, "xcollection: cannot be your own operator")
+    require(approved <= 1, "xcollection: approved is 0 or 1")
+    self.operator_approvals[caller][operator] = approved
+    emit OperatorSet(caller, operator, approved)
+    return true
+  }
+
+  //| Destroy a token.
+  //|
+  //| who      the token owner
+  //| holds    the token stops existing and its id is never reused
+  //| reveals  the owner and the token
+  //| logs     Burned(token_id, owner, total_supply)
+  //| in       token_id  the token
+  //| out      true
+  fn burn(token_id: u128): bool {
+    let current: string = _live_owner(token_id)
+    require(current == to_string(caller), "xcollection: not the token owner")
+    self.token_owner[token_id] = "0"
+    self.approvals[token_id] = "0"
+    _index_remove(current, token_id)
+    self.burned_count += 1
+    emit Burned(token_id, current, self.total_minted - self.burned_count)
+    return true
+  }
+
+  //| Destroy several tokens in one transaction.
+  //|
+  //| who      the owner of every token listed
+  //| holds    each token stops existing and its id is never reused; one token the caller does not own refuses the whole call
+  //| reveals  the owner and the tokens
+  //| logs     Burned(token_id, owner, total_supply) per token
+  //| in       ids  comma-separated token ids, 1 to 100
+  //| out      the number burned
+  fn burn_many(ids: string): u128 {
+    let n: u128 = to_int(to_string(parse_ints(ids, PARSE_BASE)))
+    require(n > 0 && n <= MAX_BATCH, "xcollection: burn 1 to 100 at a time")
+    let me: string = to_string(caller)
+    for i in 0..n {
+      let id: u128 = to_int(mget(PARSE_BASE + i))
+      let current: string = _live_owner(id)
+      require(current == me, "xcollection: not the token owner")
+      self.token_owner[id] = "0"
+      self.approvals[id] = "0"
+      _index_remove(current, id)
+      self.burned_count += 1
+      emit Burned(id, current, self.total_minted - self.burned_count)
+    }
+    return n
+  }
+
+  //| The owner of a token.
+  //| in       token_id  the token
+  //| out      the owner's address; refuses a token that was never minted or was burned
+  view fn owner_of(token_id: u128): string {
+    return _live_owner(token_id)
+  }
+
+  //| How many tokens an address holds.
+  //| in       addr  the address
+  //| out      the count
+  view fn balance_of(addr: address): u128 {
+    return self.owner_token_count[addr]
+  }
+
+  //| The metadata document of a token.
+  //| in       token_id  the token
+  //| out      the placeholder uri before the reveal epoch, base uri + document_of(id) + ".json" from it
+  view fn token_uri(token_id: u128): string {
+    _live_owner(token_id)
+    if _revealed() == 0 { return self.unrevealed_uri }
+    return concat(concat(self.base_uri, to_string(_document(token_id))), ".json")
+  }
+
+  //| The metadata document a token shows once revealed.
+  //| in       token_id  the token, minted or not
+  //| out      (token_id + order_offset) mod max_supply; final only from the reveal epoch
+  view fn document_of(token_id: u128): u128 {
+    return _document(token_id)
+  }
+
+  //| Where a token's royalty is paid.
+  //| in       token_id  the token
+  //| out      the payout address
+  view fn creator_of(token_id: u128): address {
+    _live_owner(token_id)
+    return self.payout
+  }
+
+  //| A token's royalty.
+  //| in       token_id  the token
+  //| out      basis points
+  view fn royalty_of(token_id: u128): u128 {
+    _live_owner(token_id)
+    return self.royalty_bps
+  }
+
+  //| The address approved for a token.
+  //| in       token_id  the token
+  //| out      the approved address, or "0" for none
+  view fn get_approved(token_id: u128): string {
+    _live_owner(token_id)
+    return self.approvals[token_id]
+  }
+
+  //| Whether an address may move a token.
+  //| in       token_id  the token
+  //| in       addr      the address
+  //| out      1 for the owner, the approved address or an operator of the owner, otherwise 0
+  view fn is_approved_or_owner(token_id: u128, addr: address): u128 {
+    let current: string = _live_owner(token_id)
+    let who: string = to_string(addr)
+    if current == who || self.approvals[token_id] == who || self.operator_approvals[current][addr] == 1 { return 1 }
+    return 0
+  }
+
+  //| Tokens in existence.
+  //| out      minted minus burned
+  view fn total_supply(): u128 {
+    return self.total_minted - self.burned_count
+  }
+
+  //| A page of the tokens an address holds.
+  //| in       wallet  the holder
+  //| in       offset  the first position to return
+  //| in       limit   how many to return, at most 500
+  //| out      count|id|id|... where count is everything the wallet holds
+  view fn tokens_of(wallet: address, offset: u128, limit: u128): string {
+    let total: u128 = self.owner_token_count[wallet]
+    let out: string = to_string(total)
+    let n: u128 = 0
+    if offset < total { n = min(min(total - offset, limit), MAX_PAGE) }
+    for i in 0..n {
+      out = concat(concat(out, "|"), to_string(self.owner_token_index[wallet][offset + i]))
+    }
+    return out
+  }
+
+  //| One phase of the sale.
+  //| in       phase  the phase number: 0 is holders, the last is public
+  //| out      end|price|cap|wallet_cap|list|minted, where a cap of 0 after holders means no cap
+  view fn get_phase(phase: u128): string {
+    if phase >= self.phase_count { return "0|0|0|0|0|0" }
+    let out: string = concat(to_string(self.phase_end[phase]), "|")
+    out = concat(concat(out, to_string(self.phase_price[phase])), "|")
+    out = concat(concat(out, to_string(self.phase_cap[phase])), "|")
+    out = concat(concat(out, to_string(self.phase_wallet_cap[phase])), "|")
+    out = concat(concat(out, to_string(self.phase_list[phase])), "|")
+    return concat(out, to_string(self.phase_minted[phase]))
+  }
+
+  //| Everything a mint button needs for one wallet.
+  //| in       wallet  the wallet looking at the sale
+  //| out      status|phase|until|price|phase_left|supply_left|wallet_minted|wallet_cap|list
+  //| out      status is 0 no sale set, 1 not started, 2 open, 3 ended, 4 paused; until is the epoch the status changes, 0 when it will not
+  //| out      phase is 99 unless open or paused inside a phase; the last five fields describe that phase and are 0 without one
+  view fn mint_state(wallet: address): string {
+    let at: u128 = _now()
+    let p: u128 = _phase_at(at)
+    let left: u128 = self.max_supply - self.total_minted
+    let status: u128 = 3
+    let until: u128 = 0
+    if self.phase_count == 0 {
+      status = 0
+    } else {
+      if at < self.sale_start {
+        status = 1
+        until = self.sale_start
+      }
+    }
+    let phase_left: u128 = 0
+    if p < CLOSED {
+      status = 2
+      until = self.phase_end[p]
+      let later: u128 = _unsold_caps(p + 1)
+      phase_left = 0
+      if left > later { phase_left = left - later }
+      if p == HOLDERS || self.phase_cap[p] > 0 {
+        phase_left = min(phase_left, self.phase_cap[p] - self.phase_minted[p])
+      }
+    }
+    if self.paused_at > 0 {
+      status = 4
+      until = 0
+    }
+
+    let out: string = concat(to_string(status), "|")
+    out = concat(concat(out, to_string(p)), "|")
+    out = concat(concat(out, to_string(until)), "|")
+    out = concat(concat(out, to_string(self.phase_price[p])), "|")
+    out = concat(concat(out, to_string(phase_left)), "|")
+    out = concat(concat(out, to_string(left)), "|")
+    out = concat(concat(out, to_string(self.phase_minted_by[p][wallet])), "|")
+    out = concat(concat(out, to_string(self.phase_wallet_cap[p])), "|")
+    return concat(out, to_string(self.phase_list[p]))
+  }
+
+  //| Which of a set of Xpectra ids can still claim in this collection.
+  //| in       ids  comma-separated Xpectra token ids
+  //| out      the ids that have not claimed, comma-separated, or empty
+  //| Whether an address may edit this collection's lists in Xlist.
+  //| in       who  the address asking
+  //| out      1 for the owner, and for the launch key before it expires; 0 for anyone else
+  view fn can_edit_lists(who: address): u128 {
+    if who == self.owner { return 1 }
+    return _is_key(who)
+  }
+
+  view fn unused_xpectra(ids: string): string {
+    let n: u128 = to_int(to_string(parse_ints(ids, PARSE_BASE)))
+    let out: string = ""
+    for i in 0..n {
+      let id: u128 = to_int(mget(PARSE_BASE + i))
+      if self.xpectra_used[id] == 0 {
+        if out != "" { out = concat(out, ",") }
+        out = concat(out, to_string(id))
+      }
+    }
+    return out
+  }
+
+}

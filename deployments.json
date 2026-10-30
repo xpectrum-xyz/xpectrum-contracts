@@ -1,0 +1,162 @@
+{
+  "network": "octra mainnet",
+  "rpc": "https://octra.network/rpc",
+  "explorer": "https://octrascan.io",
+  "checked": "2026-10-30",
+  "contracts": [
+    {
+      "name": "XNS1",
+      "version": "4.0.0",
+      "group": "standard",
+      "role": "Reference implementation of the XNS-1 token interface. Not deployed.",
+      "address": null,
+      "source": "contracts/standard/XNS1.aml",
+      "certificate": "verification/standard/XNS1_v4.0.0.json",
+      "bytecode_hash": "cabadd61c400dadd551c3506357b076cb2ef9f0dc1bd3c9b4f7e1b8308359626",
+      "warnings": 7
+    },
+    {
+      "name": "XuperFactory",
+      "version": "4.0.0",
+      "group": "launch",
+      "role": "Creates a configured collection in one transaction.",
+      "address": "octCzmWDXWPFWzFhjPXF3rfdeecFPNYedAoRjUyBU4rx2nz",
+      "source": "contracts/launch/XuperFactory.aml",
+      "certificate": "verification/launch/XuperFactory_v4.0.0.json",
+      "bytecode_hash": "978a7ec740cb6726b4b57fdccaa62279a2f1fe26bef9eb637b9fcbbf137e1f8b",
+      "warnings": 2
+    },
+    {
+      "name": "Xcollection",
+      "version": "6.0.0",
+      "group": "launch",
+      "role": "Collection contract embedded in XuperFactory 4.0.0 and deployed once per launch.",
+      "address": null,
+      "source": "contracts/launch/Xcollection.aml",
+      "certificate": "verification/launch/Xcollection_v6.0.0.json",
+      "bytecode_hash": "2eafd458e219e1804b7b52029c80ec4459431111a0fe14f2924e272b6670006a",
+      "warnings": 6
+    },
+    {
+      "name": "Xlist",
+      "version": "4.0.0",
+      "group": "launch",
+      "role": "Shared allowlists every launch and auction gate reads.",
+      "address": "octBnPAc1ckgGwXDDHGJcbAFtDb7ttorssqsz54epy5qiG9",
+      "source": "contracts/launch/Xlist.aml",
+      "certificate": "verification/launch/Xlist_v4.0.0.json",
+      "bytecode_hash": "4a20afd1fd195a1ca6445c5162e23e6cab4ba6b7fc832af5271019e4afb96654",
+      "warnings": 0
+    },
+    {
+      "name": "Xmarket",
+      "version": "3.2.0",
+      "group": "market",
+      "role": "Fixed-price listings, token offers and collection offers.",
+      "address": "octGoeTjaF8MiKTP5ad5FJfWMCZmmEdnrfxTow6UUVmBj6h",
+      "source": "contracts/market/Xmarket.aml",
+      "certificate": "verification/market/Xmarket_v3.2.0.json",
+      "bytecode_hash": "943cbd42f67c2d704c1ec7b1f01facc1a59024a4ce79db7afc8686baeec60e66",
+      "warnings": 0
+    },
+    {
+      "name": "Xauction",
+      "version": "5.0.0",
+      "group": "market",
+      "role": "Sealed-bid auctions.",
+      "address": "octBv5yUWMp3D5mAVcvpgC3DWgUGvH8KPMkfsSXv216LkUn",
+      "source": "contracts/market/Xauction.aml",
+      "certificate": "verification/market/Xauction_v5.0.0.json",
+      "bytecode_hash": "8cafcdef9d163b723da8873e6648c9a8513b67ea1b152f47db8b3db567b9743e",
+      "warnings": 6
+    },
+    {
+      "name": "Xdutch",
+      "version": "2.0.0",
+      "group": "market",
+      "role": "Descending-price auctions.",
+      "address": "octxD2gf2i6NDj3XJGBpNNNgiejnUFV1Dk45rNr5fJjN2s5",
+      "source": "contracts/market/Xdutch.aml",
+      "certificate": "verification/market/Xdutch_v2.0.0.json",
+      "bytecode_hash": "9eb708c2fa367976fdf2f73214cb0eb2ea2bed5cabebefecb57b10ea9bd74118",
+      "warnings": 1
+    },
+    {
+      "name": "Xenglish",
+      "version": "1.0.0",
+      "group": "market",
+      "role": "Open ascending auctions.",
+      "address": "oct8p3UhGRurjgbfbMERZBENuft4hcodx6DMTJj14W46ipU",
+      "source": "contracts/market/Xenglish.aml",
+      "certificate": "verification/market/Xenglish_v1.0.0.json",
+      "bytecode_hash": "c0f1f9dcd6d80ba6cf10d573c85c99276a4184b0d9975b481a6a43618d92c2a8",
+      "warnings": 1
+    },
+    {
+      "name": "XpectrumGenesis",
+      "version": "1.0.1",
+      "group": "xpectra",
+      "role": "The Xpectra collection.",
+      "address": "octC4PvHrT8U1vDsZ5ejEBj6UgW2fRoLfohFBSCePdstZfQ",
+      "source": "contracts/xpectra/XpectrumGenesis.aml",
+      "certificate": "verification/xpectra/XpectrumGenesis_v1.0.1.json",
+      "bytecode_hash": "9e17d6c97c9c5906117b9e3e4d7917d701cafc1c4adbd325d7a57342df353884",
+      "warnings": 4
+    },
+    {
+      "name": "Xlist",
+      "version": "2.0.0",
+      "group": "xpectra",
+      "role": "Xpectra allowlist.",
+      "address": "oct6hqXn2kSm8HptJ3MRmRAbTaY4jvTHH2ntFcSWKdKhXzx",
+      "source": "contracts/xpectra/Xlist.aml",
+      "certificate": "verification/xpectra/Xlist_v2.0.0.json",
+      "bytecode_hash": "57b1c272415bf190d88ab8691a5b6d6b0af5afd3682225a7fdc01ba6b810c937",
+      "warnings": 0
+    },
+    {
+      "name": "Xincinerator",
+      "version": "1.0.0",
+      "group": "xpectra",
+      "role": "Burn address.",
+      "address": "octGn3QwHTcGjo6Vjz5G9y8Z9hZDsYoA7gbksRqdJoaeg6q",
+      "source": "contracts/xpectra/Xincinerator.aml",
+      "certificate": "verification/xpectra/Xincinerator_v1.0.0.json",
+      "bytecode_hash": "de1ce6aa8673bf6c670bdc6bf1f6a0de60dfb8b6db0ebad61e9683ddecea1977",
+      "warnings": 0
+    },
+    {
+      "name": "XincineratorLog",
+      "version": "1.0.0",
+      "group": "xpectra",
+      "role": "Burns into the incinerator and records each burn.",
+      "address": "oct4u3PmynG2jDJADUF1iVTwPA8oxNy2LQTYNKueGdPN3zh",
+      "source": "contracts/xpectra/XincineratorLog.aml",
+      "certificate": "verification/xpectra/XincineratorLog_v1.0.0.json",
+      "bytecode_hash": "7b12f20878cf72d277b3b97eac3004111bbf3519e8ea3afdf7b075b956aa7286",
+      "warnings": 2
+    },
+    {
+      "name": "XuperFactory",
+      "version": "2.0.0",
+      "group": "legacy",
+      "role": "Previous launch factory. Superseded by 4.0.0.",
+      "address": "octHgTcvueQE5LRb2PYLJqa5T9ypUgBuyY5XyxRstoSdBVN",
+      "source": "contracts/legacy/XuperFactory.aml",
+      "certificate": "verification/legacy/XuperFactory_v2.0.0.json",
+      "bytecode_hash": "4fa02e39bd1c3f2e78f4dba2bb34a6882a3d910a2213e3f6af73c8a9d4228e6a",
+      "warnings": 1
+    },
+    {
+      "name": "Xcollection",
+      "version": "4.0.0",
+      "group": "legacy",
+      "role": "Collection contract embedded in XuperFactory 2.0.0.",
+      "address": null,
+      "source": "contracts/legacy/Xcollection.aml",
+      "certificate": "verification/legacy/Xcollection_v4.0.0.json",
+      "bytecode_hash": "e097aa4c945ea8a65a92a02bc775ffc06394df5097ef3c02c694fb9edc8a17c4",
+      "warnings": 7
+    }
+  ]
+}

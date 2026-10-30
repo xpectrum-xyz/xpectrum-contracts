@@ -1,9 +1,10 @@
 {
   "contract": "XincineratorLog",
   "version": "v1.0.0",
-  "generated": "2026-09-04",
+  "generated": "2026-10-30",
   "chain": "octra mainnet",
-  "source_file": "contracts/XincineratorLog.aml",
+  "source_file": "contracts/xpectra/XincineratorLog.aml",
+  "address": "oct4u3PmynG2jDJADUF1iVTwPA8oxNy2LQTYNKueGdPN3zh",
   "size": 2681,
   "certificate": {
     "schema": "aml_bytecode_certificate_v1",
@@ -11,7 +12,7 @@
     "compiler_version": "1.0 Rehovot",
     "verification_schema": "aml_safety_report_v1",
     "source_mode": "single",
-    "source_hash": "60b34c89f9099c8eee6465be672e7cfb09e90abdec86589cc2f2aa1156c8ea43",
+    "source_hash": "275bcc95dea05f14f2bbecf00177942c1e9a827476a26f63112d81013b539b85",
     "bytecode_hash": "7b12f20878cf72d277b3b97eac3004111bbf3519e8ea3afdf7b075b956aa7286",
     "verification_hash": "39075018b6cfd59e231fc8dcf60c0bdf79dd31770ef10fcbdbb159226f1d5477"
   },
@@ -217,6 +218,5 @@
         "parameter": "token_id"
       }
     ]
-  },
-  "abi": "{\"functions\":[{\"name\":\"burn_range\",\"inputs\":[\"address\",\"bytes\",\"bytes\"],\"output\":\"bytes\",\"view\":false,\"payable\":false},{\"name\":\"get_incinerator\",\"inputs\":[],\"output\":\"address\",\"view\":true,\"payable\":false},{\"name\":\"get_total_burned\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"get_burned_count\",\"inputs\":[\"address\"],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"token_is_burned\",\"inputs\":[\"address\",\"bytes\"],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"get_event_log\",\"inputs\":[\"bytes\",\"bytes\"],\"output\":\"string\",\"view\":true,\"payable\":false}],\"events\":[{\"name\":\"Burned\",\"fields\":[{\"name\":\"collection\",\"type\":\"address\"},{\"name\":\"token_id\",\"type\":\"bytes\"},{\"name\":\"owner\",\"type\":\"address\"},{\"name\":\"burn_epoch\",\"type\":\"bytes\"}]}]}"
+  }
 }

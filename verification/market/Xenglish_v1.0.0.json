@@ -1,0 +1,472 @@
+{
+  "contract": "Xenglish",
+  "version": "v1.0.0",
+  "generated": "2026-10-30",
+  "chain": "octra mainnet",
+  "source_file": "contracts/market/Xenglish.aml",
+  "address": "oct8p3UhGRurjgbfbMERZBENuft4hcodx6DMTJj14W46ipU",
+  "size": 12811,
+  "certificate": {
+    "schema": "aml_bytecode_certificate_v1",
+    "compiler": "octra_aml",
+    "compiler_version": "1.0 Rehovot",
+    "verification_schema": "aml_safety_report_v1",
+    "source_mode": "single",
+    "source_hash": "5872249acd2a99f2a515889fb7e1a9deb9fe4d45cbead44e450faa3305ca5ed7",
+    "bytecode_hash": "c0f1f9dcd6d80ba6cf10d573c85c99276a4184b0d9975b481a6a43618d92c2a8",
+    "verification_hash": "118fad847ea259f1920fdb0bf7bf18aaacf561f619399b9e381a8c8845d6d9a7"
+  },
+  "verification": {
+    "schema": "aml_safety_report_v1",
+    "engine": "aml_ast_verifier",
+    "proof_model": "formal/coq/aml_value_safety_model.v",
+    "proof_gate": "scripts/check_aml_formal.sh",
+    "program_name": "Xenglish",
+    "verified": true,
+    "safety": "warning",
+    "errors": 0,
+    "warnings": 1,
+    "trace": [
+      {
+        "code": "signed_value_storage",
+        "title": "value-like storage must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_parameter",
+        "title": "value-moving public parameters must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_flow",
+        "title": "signed values must not flow into value-like storage writes",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_arithmetic_range_not_proven",
+        "title": "unsigned arithmetic writes must prove range safety",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "supply_invariant_unproven",
+        "title": "balance and total supply writes should preserve conservation",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_parameter_without_positive_guard",
+        "title": "unsigned value parameters should reject zero unless zero is meaningful",
+        "status": "warning",
+        "severity": "warning",
+        "findings": 1
+      },
+      {
+        "code": "unchecked_transfer_result",
+        "title": "native transfer result should be checked",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      }
+    ],
+    "function_summaries": [
+      {
+        "name": "_log",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [
+          "event_log",
+          "event_log_count"
+        ],
+        "transitive_writes": [
+          "event_log",
+          "event_log_count"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_credit",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [
+          "pending"
+        ],
+        "transitive_writes": [
+          "pending"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_gate_digest",
+        "visibility": "private",
+        "direct_calls": [
+          "concat",
+          "sha256",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "preview_gate_digest",
+        "visibility": "public",
+        "direct_calls": [
+          "_gate_digest"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_send_asset",
+        "visibility": "private",
+        "direct_calls": [
+          "call",
+          "to_string"
+        ],
+        "direct_writes": [
+          "a_held"
+        ],
+        "transitive_writes": [
+          "a_held"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "min_next_bid",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "create_auction",
+        "visibility": "public",
+        "direct_calls": [
+          "_log",
+          "call",
+          "concat",
+          "len",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "a_contract",
+          "a_end_at",
+          "a_gated",
+          "a_held",
+          "a_inc_bps",
+          "a_open_at",
+          "a_seller",
+          "a_start",
+          "a_status",
+          "a_token",
+          "auction_count"
+        ],
+        "transitive_writes": [
+          "a_contract",
+          "a_end_at",
+          "a_gated",
+          "a_held",
+          "a_inc_bps",
+          "a_open_at",
+          "a_seller",
+          "a_start",
+          "a_status",
+          "a_token",
+          "auction_count",
+          "event_log",
+          "event_log_count"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "add_allow",
+        "visibility": "public",
+        "direct_calls": [
+          "len",
+          "mget",
+          "split",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "a_allow",
+          "a_allow_size",
+          "a_gate_salt"
+        ],
+        "transitive_writes": [
+          "a_allow",
+          "a_allow_size",
+          "a_gate_salt"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_gate",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [
+          "a_gated"
+        ],
+        "transitive_writes": [
+          "a_gated"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "is_allowed",
+        "visibility": "public",
+        "direct_calls": [
+          "_gate_digest"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_gate",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "bid",
+        "visibility": "public",
+        "direct_calls": [
+          "_credit",
+          "_gate_digest",
+          "_log",
+          "concat",
+          "min_next_bid",
+          "to_string"
+        ],
+        "direct_writes": [
+          "a_bids",
+          "a_end_at",
+          "a_top",
+          "a_top_by",
+          "escrowed",
+          "pending"
+        ],
+        "transitive_writes": [
+          "a_bids",
+          "a_end_at",
+          "a_top",
+          "a_top_by",
+          "escrowed",
+          "event_log",
+          "event_log_count",
+          "pending"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "cancel_auction",
+        "visibility": "public",
+        "direct_calls": [
+          "_log",
+          "_send_asset",
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [
+          "a_status"
+        ],
+        "transitive_writes": [
+          "a_held",
+          "a_status",
+          "event_log",
+          "event_log_count"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "settle",
+        "visibility": "public",
+        "direct_calls": [
+          "_credit",
+          "_log",
+          "_send_asset",
+          "call",
+          "concat",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "a_status",
+          "escrowed",
+          "fee_balance",
+          "total_volume"
+        ],
+        "transitive_writes": [
+          "a_held",
+          "a_status",
+          "escrowed",
+          "event_log",
+          "event_log_count",
+          "fee_balance",
+          "pending",
+          "total_volume"
+        ],
+        "value_writes": [
+          "fee_balance"
+        ],
+        "signed_params": []
+      },
+      {
+        "name": "claim_proceeds",
+        "visibility": "public",
+        "direct_calls": [
+          "to_string",
+          "transfer"
+        ],
+        "direct_writes": [
+          "pending"
+        ],
+        "transitive_writes": [
+          "pending"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "withdraw_fees",
+        "visibility": "public",
+        "direct_calls": [
+          "transfer"
+        ],
+        "direct_writes": [
+          "fee_balance"
+        ],
+        "transitive_writes": [
+          "fee_balance"
+        ],
+        "value_writes": [
+          "fee_balance"
+        ],
+        "signed_params": []
+      },
+      {
+        "name": "get_proceeds",
+        "visibility": "public",
+        "direct_calls": [
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_version",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_stats",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_auction",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_event",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "constructor",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [
+          "auction_count",
+          "owner"
+        ],
+        "transitive_writes": [
+          "auction_count",
+          "owner"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      }
+    ],
+    "invariants": [
+      {
+        "code": "supply_balance_conservation",
+        "kind": "derived",
+        "status": "not_applicable",
+        "expression": null,
+        "message": "program does not expose both balance and supply storage",
+        "fields": [
+          "fee_balance"
+        ],
+        "functions": []
+      }
+    ],
+    "findings": [
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "Xenglish",
+        "function_name": "bid",
+        "state_field": null,
+        "parameter": "amount"
+      }
+    ]
+  }
+}

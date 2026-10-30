@@ -1,5 +1,15 @@
-// XincineratorLog >> burns a caller's own tokens into the Xincinerator and logs them.
-// Grant it operator rights on the collection first, revoke after.
+// SPDX-License-Identifier: MIT
+
+//| XincineratorLog
+//| Burns a caller's own tokens into the Xincinerator and records each one.
+//|
+//| model    moves up to 20 consecutive tokens per call from the caller to a burn address fixed at deploy
+//| custody  never holds a token; it needs operator rights on the collection for the duration of a burn
+//| payout   none
+//| privacy  every burn is public: collection, token, owner and epoch
+//| units    time in epochs
+//| version  1.0.0
+//| license  MIT
 
 contract XincineratorLog {
 
@@ -12,6 +22,7 @@ contract XincineratorLog {
     event_log_count: u128
   }
 
+  //| Written for each token burned.
   event Burned(collection: address, token_id: u128, owner: address, burn_epoch: u128)
 
   constructor(incinerator_addr: address) {
@@ -33,6 +44,15 @@ contract XincineratorLog {
     self.event_log_count += 1
   }
 
+  //| Burns a run of the caller's tokens into the incinerator.
+  //| who      the owner of every token in the range, after granting this contract operator rights on the collection
+  //| holds    each token moves to the incinerator and cannot leave it
+  //| reveals  the collection, each token id, the owner and the epoch
+  //| logs     Burned, and burn|collection|token_id|owner|epoch in the event log
+  //| in       collection  the collection address
+  //| in       start_id    first token id
+  //| in       count       number of tokens, 1 to 20
+  //| out      number burned; the call reverts as a whole if any token fails
   fn burn_range(collection: address, start_id: u128, count: u128): u128 {
     require(is_address(collection) && collection != 0, "xinc: invalid collection")
     require(count > 0 && count <= 20, "xinc: count must be 1-20")
@@ -59,23 +79,37 @@ contract XincineratorLog {
     return burned_n
   }
 
+  //| Burn address this contract sends to.
+  //| out      address
   view fn get_incinerator(): address {
     return self.incinerator
   }
 
-  // counts every collection this was pointed at, use get_burned_count for one
+  //| Tokens burned through this contract across every collection.
+  //| out      count
   view fn get_total_burned(): u128 {
     return self.total_burned
   }
 
+  //| Tokens burned through this contract for one collection.
+  //| in       collection  the collection address
+  //| out      count
   view fn get_burned_count(collection: address): u128 {
     return self.coll_burned[collection]
   }
 
+  //| Whether a token was burned through this contract.
+  //| in       collection  the collection address
+  //| in       token_id    the token
+  //| out      1 burned, 0 not
   view fn token_is_burned(collection: address, token_id: u128): u128 {
     return self.is_burned[collection][token_id]
   }
 
+  //| Page of the event log.
+  //| in       from   first entry index
+  //| in       count  entries wanted, at most 50
+  //| out      total~entry~entry..., each entry burn|collection|token_id|owner|epoch
   view fn get_event_log(from: u128, count: u128): string {
     let total = self.event_log_count
     let out = to_string(total)

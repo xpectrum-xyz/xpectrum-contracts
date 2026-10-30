@@ -1,10 +1,10 @@
 {
   "contract": "XNS1",
   "version": "v4.0.0",
-  "generated": "2026-09-04",
-  "status": "reference implementation, verified, not deployed",
-  "source_file": "contracts/XNS1.aml",
+  "generated": "2026-10-30",
   "chain": "octra mainnet",
+  "source_file": "contracts/standard/XNS1.aml",
+  "address": null,
   "size": 12172,
   "certificate": {
     "schema": "aml_bytecode_certificate_v1",
@@ -12,7 +12,7 @@
     "compiler_version": "1.0 Rehovot",
     "verification_schema": "aml_safety_report_v1",
     "source_mode": "single",
-    "source_hash": "f55d89cd5f33cd842262e656a082fe268a0fb8ee83f4241370577d72dea08107",
+    "source_hash": "7d895e355c7d01332feb9318c13b9bc91813a7a0837ff456b9a8ff7147441821",
     "bytecode_hash": "cabadd61c400dadd551c3506357b076cb2ef9f0dc1bd3c9b4f7e1b8308359626",
     "verification_hash": "b2b94757749f10e261f70a99fdf4c90be7528e8a1390dcbcc52b298406f790ae"
   },
@@ -675,16 +675,5 @@
         "parameter": "token_id"
       }
     ]
-  },
-  "abi": "{\"functions\":[{\"name\":\"mint\",\"inputs\":[\"address\",\"address\",\"string\",\"bytes\"],\"output\":\"bytes\",\"view\":false,\"payable\":false},{\"name\":\"burn\",\"inputs\":[\"bytes\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"transfer\",\"inputs\":[\"address\",\"bytes\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"transfer_from\",\"inputs\":[\"address\",\"address\",\"bytes\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"approve\",\"inputs\":[\"address\",\"bytes\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"revoke_approval\",\"inputs\":[\"bytes\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"set_operator\",\"inputs\":[\"address\",\"bytes\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"transfer_ownership\",\"inputs\":[\"address\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"set_provenance_hash\",\"inputs\":[\"string\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"get_provenance_hash\",\"inputs\":[],\"output\":\"string\",\"view\":true,\"payable\":false},{\"name\":\"add_circle_resource\",\"inputs\":[\"bytes\",\"string\",\"string\"],\"output\":\"bytes\",\"view\":false,\"payable\":false},{\"name\":\"set_circle_resource\",\"inputs\":[\"bytes\",\"bytes\",\"string\",\"string\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"clear_circle_resource\",\"inputs\":[\"bytes\",\"bytes\"],\"output\":\"bool\",\"view\":false,\"payable\":false},{\"name\":\"owner_of\",\"inputs\":[\"bytes\"],\"output\":\"address\",\"view\":true,\"payable\":false},{\"name\":\"creator_of\",\"inputs\":[\"bytes\"],\"output\":\"address\",\"view\":true,\"payable\":false},{\"name\":\"royalty_of\",\"inputs\":[\"bytes\"],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"token_uri\",\"inputs\":[\"bytes\"],\"output\":\"string\",\"view\":true,\"payable\":false},{\"name\":\"token_circle_count\",\"inputs\":[\"bytes\"],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"token_circle_uri\",\"inputs\":[\"bytes\",\"bytes\"],\"output\":\"string\",\"view\":true,\"payable\":false},{\"name\":\"collection_of\",\"inputs\":[\"bytes\"],\"output\":\"string\",\"view\":true,\"payable\":false},{\"name\":\"balance_of\",\"inputs\":[\"address\"],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"get_approved\",\"inputs\":[\"bytes\"],\"output\":\"address\",\"view\":true,\"payable\":false},{\"name\":\"total_supply\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"total_minted\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"burned\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"is_burned\",\"inputs\":[\"bytes\"],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"symbol\",\"inputs\":[],\"output\":\"string\",\"view\":true,\"payable\":false},{\"name\":\"is_approved_or_owner\",\"inputs\":[\"bytes\",\"address\"],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"get_token_info\",\"inputs\":[\"bytes\"],\"output\":\"string\",\"view\":true,\"payable\":false},{\"name\":\"get_token_circle_info\",\"inputs\":[\"bytes\",\"bytes\"],\"output\":\"string\",\"view\":true,\"payable\":false},{\"name\":\"get_contract_info\",\"inputs\":[],\"output\":\"string\",\"view\":true,\"payable\":false},{\"name\":\"get_event_log\",\"inputs\":[\"bytes\",\"bytes\"],\"output\":\"string\",\"view\":true,\"payable\":false}],\"events\":[{\"name\":\"Minted\",\"fields\":[{\"name\":\"token_id\",\"type\":\"bytes\"},{\"name\":\"owner\",\"type\":\"address\"},{\"name\":\"creator\",\"type\":\"address\"}]},{\"name\":\"Transferred\",\"fields\":[{\"name\":\"token_id\",\"type\":\"bytes\"},{\"name\":\"from\",\"type\":\"address\"},{\"name\":\"to\",\"type\":\"address\"}]},{\"name\":\"Burned\",\"fields\":[{\"name\":\"token_id\",\"type\":\"bytes\"},{\"name\":\"owner\",\"type\":\"address\"},{\"name\":\"total_supply\",\"type\":\"bytes\"}]},{\"name\":\"Approved\",\"fields\":[{\"name\":\"token_id\",\"type\":\"bytes\"},{\"name\":\"approved\",\"type\":\"address\"}]},{\"name\":\"ApprovalRevoked\",\"fields\":[{\"name\":\"token_id\",\"type\":\"bytes\"}]},{\"name\":\"OperatorSet\",\"fields\":[{\"name\":\"owner\",\"type\":\"address\"},{\"name\":\"operator\",\"type\":\"address\"},{\"name\":\"approved\",\"type\":\"bytes\"}]},{\"name\":\"OwnershipTransferred\",\"fields\":[{\"name\":\"old_owner\",\"type\":\"address\"},{\"name\":\"new_owner\",\"type\":\"address\"}]},{\"name\":\"ProvenanceHashSet\",\"fields\":[{\"name\":\"hash\",\"type\":\"string\"}]},{\"name\":\"CircleResourceSet\",\"fields\":[{\"name\":\"token_id\",\"type\":\"bytes\"},{\"name\":\"resource_id\",\"type\":\"bytes\"},{\"name\":\"uri\",\"type\":\"string\"},{\"name\":\"access\",\"type\":\"string\"}]},{\"name\":\"CircleResourceCleared\",\"fields\":[{\"name\":\"token_id\",\"type\":\"bytes\"},{\"name\":\"resource_id\",\"type\":\"bytes\"}]}]}",
-  "builds": {
-    "mainnet": {
-      "bytecode_hash": "cabadd61c400dadd551c3506357b076cb2ef9f0dc1bd3c9b4f7e1b8308359626",
-      "size": 12172
-    },
-    "devnet": {
-      "bytecode_hash": "5336acb6527dd0f2363d23510bebf5cdd4854f9aed912c83bf4305daf4025031",
-      "size": 12412
-    }
   }
 }

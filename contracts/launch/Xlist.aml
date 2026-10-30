@@ -1,0 +1,184 @@
+// SPDX-License-Identifier: FSL-1.1-MIT
+
+//| Xlist
+//| Shared allowlists that any mint or sale can ask about.
+//|
+//| model    a list is named by its owner's address and a number the owner picks, and exists from its first write
+//| model    a contract that owns lists names who may edit them through its can_edit_lists view
+//| model    a digest list stores sha256("xlist|<owner>:<list>|<address>|<code>") against an allowance, never an address
+//| model    a holder list stores nothing: membership is owning a token of its collection, and the code is the token id
+//| custody  holds no tokens and no OCT
+//| payout   none
+//| privacy  with an empty code anyone can test a candidate address; with a private code per member an entry cannot be tied to an address until that member uses it
+//| units    allowances are token counts
+//| version  4.0.0
+//| license  FSL-1.1-MIT, MIT from 2028-10-30
+
+interface IXlist {
+  fn is_member(owner: address, list_id: u128, who: address, code: string): u128
+  fn is_holder_list(owner: address, list_id: u128): u128
+}
+
+contract Xlist implements IXlist {
+
+  event ListChanged(owner: address, list_id: u128, size: u128)
+  event ListHolderSet(owner: address, list_id: u128, collection: address)
+  event ListFrozen(owner: address, list_id: u128)
+
+  const SPLIT_BASE: u128 = 100
+
+  state {
+    size: map[string]u128
+    frozen: map[string]u128
+    holder_of: map[string]string
+    entry: map[string]map[string]u128
+  }
+
+  constructor() {
+  }
+
+  private fn _key(owner: address, list_id: u128): string {
+    return concat(concat(to_string(owner), ":"), to_string(list_id))
+  }
+
+  private fn _mine(owner: address, list_id: u128): string {
+    if caller != owner {
+      require(to_int(call(owner, "can_edit_lists", caller)) == 1, "xlist: only the list owner or an editor it names")
+    }
+    let k: string = _key(owner, list_id)
+    require(self.frozen[k] == 0, "xlist: this list is frozen")
+    return k
+  }
+
+  private fn _write(owner: address, list_id: u128, digests: string, allowance: u128): u128 {
+    let k: string = _mine(owner, list_id)
+    let n: u128 = to_int(to_string(split(digests, ",")))
+    let size: u128 = self.size[k]
+    let changed: u128 = 0
+    for i in 0..n {
+      let d: string = to_string(mget(SPLIT_BASE + i))
+      require(len(d) == 64, "xlist: a digest is 64 hex characters")
+      let had: u128 = self.entry[k][d]
+      if had != allowance {
+        self.entry[k][d] = allowance
+        changed += 1
+        if had == 0 { size += 1 }
+        if allowance == 0 { size -= 1 }
+      }
+    }
+    self.size[k] = size
+    emit ListChanged(owner, list_id, size)
+    return changed
+  }
+
+  //| Add members to a list, or change their allowance.
+  //|
+  //| who      the list owner, or an address the owner contract's can_edit_lists admits
+  //| when     until the list is frozen
+  //| reveals  the digests and the allowance, not the addresses behind them
+  //| logs     ListChanged(owner, list_id, size)
+  //| in       owner      the list owner
+  //| in       list_id    the owner's number for the list
+  //| in       allowance  how many each of these members may take, above zero
+  //| in       digests    comma-separated digests as digest_of returns them
+  //| out      how many entries were written
+  fn add(owner: address, list_id: u128, allowance: u128, digests: string): u128 {
+    require(allowance > 0, "xlist: an allowance is above zero")
+    return _write(owner, list_id, digests, allowance)
+  }
+
+  //| Remove members from a list.
+  //|
+  //| who      the list owner, or an address the owner contract's can_edit_lists admits
+  //| when     until the list is frozen
+  //| logs     ListChanged(owner, list_id, size)
+  //| in       owner    the list owner
+  //| in       list_id  the owner's number for the list
+  //| in       digests  comma-separated digests to remove
+  //| out      how many entries were removed
+  fn remove(owner: address, list_id: u128, digests: string): u128 {
+    return _write(owner, list_id, digests, 0)
+  }
+
+  //| Make a list a holder list for a collection.
+  //|
+  //| who      the list owner, or an address the owner contract's can_edit_lists admits
+  //| when     until the list is frozen
+  //| holds    a list cannot admit holders of its owner's own tokens, so a mint never opens the next one
+  //| logs     ListHolderSet(owner, list_id, collection)
+  //| in       owner       the list owner
+  //| in       list_id     the owner's number for the list
+  //| in       collection  the collection whose token owners are the members
+  //| out      true
+  fn set_holder_list(owner: address, list_id: u128, collection: address): bool {
+    let k: string = _mine(owner, list_id)
+    assert_address(collection)
+    require(collection != owner, "xlist: a collection cannot admit holders of its own tokens")
+    self.holder_of[k] = to_string(collection)
+    emit ListHolderSet(owner, list_id, collection)
+    return true
+  }
+
+  //| Freeze a list so it can never change again.
+  //|
+  //| who      the list owner, or an address the owner contract's can_edit_lists admits
+  //| logs     ListFrozen(owner, list_id)
+  //| in       owner    the list owner
+  //| in       list_id  the owner's number for the list
+  //| out      true
+  fn freeze(owner: address, list_id: u128): bool {
+    let k: string = _mine(owner, list_id)
+    self.frozen[k] = 1
+    emit ListFrozen(owner, list_id)
+    return true
+  }
+
+  //| The digest that stands for one address on one list.
+  //| in       owner    the list owner
+  //| in       list_id  the owner's number for the list
+  //| in       who      the member's address
+  //| in       code     the member's private code, or empty
+  //| out      sha256("xlist|<owner>:<list_id>|<who>|<code>") as 64 hex characters
+  view fn digest_of(owner: address, list_id: u128, who: address, code: string): string {
+    let pre: string = concat(concat("xlist|", _key(owner, list_id)), "|")
+    pre = concat(concat(pre, to_string(who)), "|")
+    return sha256(concat(pre, code))
+  }
+
+  //| How many an address may take from a list. A contract passes its own caller as who.
+  //| in       owner    the list owner
+  //| in       list_id  the owner's number for the list
+  //| in       who      the address asking
+  //| in       code     the member's code on a digest list, the token id on a holder list
+  //| out      the allowance, 1 for a holder, 0 for anyone the list does not admit
+  view fn is_member(owner: address, list_id: u128, who: address, code: string): u128 {
+    let k: string = _key(owner, list_id)
+    let collection: string = self.holder_of[k]
+    if collection != "0" {
+      let holder: string = call(collection, "owner_of", to_int(code))
+      if holder == to_string(who) { return 1 }
+      return 0
+    }
+    return self.entry[k][digest_of(owner, list_id, who, code)]
+  }
+
+  //| Whether a list is a holder list.
+  //| in       owner    the list owner
+  //| in       list_id  the owner's number for the list
+  //| out      1 for a holder list, 0 otherwise
+  view fn is_holder_list(owner: address, list_id: u128): u128 {
+    if self.holder_of[_key(owner, list_id)] != "0" { return 1 }
+    return 0
+  }
+
+  //| A list's settings.
+  //| in       owner    the list owner
+  //| in       list_id  the owner's number for the list
+  //| out      size|frozen|collection, where collection is "0" unless it is a holder list
+  view fn get_list(owner: address, list_id: u128): string {
+    let k: string = _key(owner, list_id)
+    let out: string = concat(to_string(self.size[k]), "|")
+    out = concat(concat(out, to_string(self.frozen[k])), "|")
+    return concat(out, self.holder_of[k])
+  }
+}

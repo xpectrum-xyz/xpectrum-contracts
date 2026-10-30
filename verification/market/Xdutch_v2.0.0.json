@@ -1,0 +1,407 @@
+{
+  "contract": "Xdutch",
+  "version": "v2.0.0",
+  "generated": "2026-10-30",
+  "chain": "octra mainnet",
+  "source_file": "contracts/market/Xdutch.aml",
+  "address": "octxD2gf2i6NDj3XJGBpNNNgiejnUFV1Dk45rNr5fJjN2s5",
+  "size": 10368,
+  "certificate": {
+    "schema": "aml_bytecode_certificate_v1",
+    "compiler": "octra_aml",
+    "compiler_version": "1.0 Rehovot",
+    "verification_schema": "aml_safety_report_v1",
+    "source_mode": "single",
+    "source_hash": "7ecafbe1e18d26543d554b7b235dc94c961ac468b368dc75990de65b1f01546a",
+    "bytecode_hash": "9eb708c2fa367976fdf2f73214cb0eb2ea2bed5cabebefecb57b10ea9bd74118",
+    "verification_hash": "ac852ca8a81fd33e9be334a3e371455e0ffacd95bdc1183d9b84716494153cd6"
+  },
+  "verification": {
+    "schema": "aml_safety_report_v1",
+    "engine": "aml_ast_verifier",
+    "proof_model": "formal/coq/aml_value_safety_model.v",
+    "proof_gate": "scripts/check_aml_formal.sh",
+    "program_name": "Xdutch",
+    "verified": true,
+    "safety": "warning",
+    "errors": 0,
+    "warnings": 1,
+    "trace": [
+      {
+        "code": "signed_value_storage",
+        "title": "value-like storage must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_parameter",
+        "title": "value-moving public parameters must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_flow",
+        "title": "signed values must not flow into value-like storage writes",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_arithmetic_range_not_proven",
+        "title": "unsigned arithmetic writes must prove range safety",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "supply_invariant_unproven",
+        "title": "balance and total supply writes should preserve conservation",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_parameter_without_positive_guard",
+        "title": "unsigned value parameters should reject zero unless zero is meaningful",
+        "status": "warning",
+        "severity": "warning",
+        "findings": 1
+      },
+      {
+        "code": "unchecked_transfer_result",
+        "title": "native transfer result should be checked",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      }
+    ],
+    "function_summaries": [
+      {
+        "name": "_credit",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [
+          "pending"
+        ],
+        "transitive_writes": [
+          "pending"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_gate_digest",
+        "visibility": "private",
+        "direct_calls": [
+          "concat",
+          "sha256",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "preview_gate_digest",
+        "visibility": "public",
+        "direct_calls": [
+          "_gate_digest"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "price_at",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "current_price",
+        "visibility": "public",
+        "direct_calls": [
+          "price_at"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "open_sale",
+        "visibility": "public",
+        "direct_calls": [
+          "call",
+          "len",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "s_contract",
+          "s_end_at",
+          "s_floor",
+          "s_gated",
+          "s_held",
+          "s_open_at",
+          "s_seller",
+          "s_start",
+          "s_status",
+          "s_step",
+          "s_token",
+          "sale_count"
+        ],
+        "transitive_writes": [
+          "s_contract",
+          "s_end_at",
+          "s_floor",
+          "s_gated",
+          "s_held",
+          "s_open_at",
+          "s_seller",
+          "s_start",
+          "s_status",
+          "s_step",
+          "s_token",
+          "sale_count"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "add_allow",
+        "visibility": "public",
+        "direct_calls": [
+          "len",
+          "mget",
+          "split",
+          "to_int",
+          "to_string"
+        ],
+        "direct_writes": [
+          "s_allow",
+          "s_allow_size",
+          "s_gate_salt"
+        ],
+        "transitive_writes": [
+          "s_allow",
+          "s_allow_size",
+          "s_gate_salt"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_gate",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [
+          "s_gated"
+        ],
+        "transitive_writes": [
+          "s_gated"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "is_allowed",
+        "visibility": "public",
+        "direct_calls": [
+          "_gate_digest"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_gate",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "buy",
+        "visibility": "public",
+        "direct_calls": [
+          "_credit",
+          "_gate_digest",
+          "call",
+          "price_at",
+          "to_int",
+          "to_string",
+          "transfer"
+        ],
+        "direct_writes": [
+          "fee_balance",
+          "s_buyer",
+          "s_held",
+          "s_price",
+          "s_status",
+          "total_volume"
+        ],
+        "transitive_writes": [
+          "fee_balance",
+          "pending",
+          "s_buyer",
+          "s_held",
+          "s_price",
+          "s_status",
+          "total_volume"
+        ],
+        "value_writes": [
+          "fee_balance"
+        ],
+        "signed_params": []
+      },
+      {
+        "name": "reclaim",
+        "visibility": "public",
+        "direct_calls": [
+          "call",
+          "to_string"
+        ],
+        "direct_writes": [
+          "s_held",
+          "s_status"
+        ],
+        "transitive_writes": [
+          "s_held",
+          "s_status"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "claim_proceeds",
+        "visibility": "public",
+        "direct_calls": [
+          "to_string",
+          "transfer"
+        ],
+        "direct_writes": [
+          "pending"
+        ],
+        "transitive_writes": [
+          "pending"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "withdraw_fees",
+        "visibility": "public",
+        "direct_calls": [
+          "transfer"
+        ],
+        "direct_writes": [
+          "fee_balance"
+        ],
+        "transitive_writes": [
+          "fee_balance"
+        ],
+        "value_writes": [
+          "fee_balance"
+        ],
+        "signed_params": []
+      },
+      {
+        "name": "get_proceeds",
+        "visibility": "public",
+        "direct_calls": [
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_version",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_stats",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_sale",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "constructor",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [
+          "owner",
+          "sale_count"
+        ],
+        "transitive_writes": [
+          "owner",
+          "sale_count"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      }
+    ],
+    "invariants": [
+      {
+        "code": "supply_balance_conservation",
+        "kind": "derived",
+        "status": "not_applicable",
+        "expression": null,
+        "message": "program does not expose both balance and supply storage",
+        "fields": [
+          "fee_balance"
+        ],
+        "functions": []
+      }
+    ],
+    "findings": [
+      {
+        "severity": "warning",
+        "code": "unsigned_parameter_without_positive_guard",
+        "message": "unsigned value parameter allows zero unless guarded",
+        "program_name": "Xdutch",
+        "function_name": "reclaim",
+        "state_field": null,
+        "parameter": "sale_id"
+      }
+    ]
+  }
+}

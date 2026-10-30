@@ -1,14 +1,15 @@
-// Xmarket: the Xpectrum secondary marketplace.
-// Trades any XNS-1 contract: fixed-price listings, single-token offers, collection-wide offers.
-// Royalty is read from the token contract and paid at settlement. Fee is 2.5%.
-// Proceeds are never pushed. They are credited to the recipient and claimed later with claim_proceeds.
-// u128 cannot hold -1, so a collection offer is marked by the offer_is_collection flag rather than a token_id sentinel.
-// A collection offer carries a quantity. offer_amount is the price per unit and the escrow is amount * quantity, so an accept settles one unit and a cancel refunds the rest.
-// standard_mode is set per collection by the owner. A flagged collection is checked with owner_of + get_approved instead of is_approved_or_owner, which lets contracts shaped like ERC-721 trade here unchanged. That lane has no operator support.
-// Neither lane lets a caller buy their own listing or accept their own offer.
-// sale| carries listing ids and osale| carries offer ids. They are separate types because an id means a different thing in each.
-//
-// get_offer >> offer_id | offerer | nft_contract | token_id | offer_is_collection | amount | quantity | expires_epoch | active
+// SPDX-License-Identifier: FSL-1.1-MIT
+
+//| Xmarket
+//| Marketplace for NFTs: fixed-price listings, offers on a token and offers on a collection.
+//|
+//| model    a listing sells at its price to the first buyer; an offer sells to the first holder who accepts it
+//| custody  a listed token stays with its seller, who approves this contract, and moves at purchase; offers are held here in full until accepted, cancelled or expired
+//| payout   each sale pays a 2.5% fee and the collection royalty, capped at 10%; proceeds, royalties and refunds are credited and withdrawn with claim_proceeds
+//| privacy  none by design: listings, offers, prices and both parties are public
+//| units    amounts in micro-OCT (1 OCT = 1,000,000), time in epochs
+//| version  3.2.0
+//| license  FSL-1.1-MIT, MIT from 2028-10-02
 
 contract Xmarket_v3 {
 
@@ -32,6 +33,7 @@ contract Xmarket_v3 {
     listing_contract: map[u128]address
     listing_token_id: map[u128]u128
     listing_price:    map[u128]u128
+    // 0 closed, 1 active, 2 sold
     listing_status:   map[u128]u128
     listing_epoch:    map[u128]u128
 
@@ -39,26 +41,25 @@ contract Xmarket_v3 {
     offer_contract:      map[u128]address
     offer_token_id:      map[u128]u128
     offer_is_collection: map[u128]u128
-    // price per unit, so the escrow is offer_amount * offer_quantity
+    // price per unit
     offer_amount:        map[u128]u128
     offer_expires:       map[u128]u128
     offer_active:        map[u128]u128
     // remaining units (single-token offers: 1)
     offer_quantity:      map[u128]u128
 
-    // 1 = universal-check collection, read with owner_of + get_approved instead of is_approved_or_owner.
-    // Owner-set at onboarding. Default 0 is XNS-1 mode.
+    // 1 = checked with owner_of and get_approved
     standard_mode: map[address]u128
 
-    // (listing_id + 1) sentinel; 0 = no active listing
+    // listing_id + 1, or 0 for none
     contract_token_listing: map[address]map[u128]u128
 
-    // global active listing index (swap-and-pop)
+    // active listings
     active_ids:   map[u128]u128
     active_pos:   map[u128]u128
     active_count: u128
 
-    // per-collection active listing index (swap-and-pop)
+    // active listings per collection
     coll_ids:   map[address]map[u128]u128
     coll_pos:   map[address]map[u128]u128
     coll_count: map[address]u128
@@ -124,10 +125,6 @@ contract Xmarket_v3 {
     self.pending_proceeds[recipient] = np
   }
 
-  // Ownership and approval gate.
-  // XNS-1 collections answer is_approved_or_owner, which covers owner, per-token approval and operator.
-  // Standard-mode collections do not have that function, and calling a missing one reverts the whole tx, so they are read with owner_of and get_approved instead. That lane has no operator support.
-  // Reverts unless addr may move token_id, and returns 1 otherwise.
   private fn _check_approved_or_owner(nft_contract: address, token_id: u128, addr: address): u128 {
     if self.standard_mode[nft_contract] == 1 {
       let current_owner = call(nft_contract, "owner_of", token_id)
@@ -141,10 +138,6 @@ contract Xmarket_v3 {
     return 1
   }
 
-  // Strict ownership gate for offer accepts.
-  // Proceeds are credited to the caller, so the caller has to be the current owner: an approved or operator caller would otherwise be paid for someone else's token if the collection's transfer_from were lax about the from param.
-  // owner_of is universal, so this needs no standard-mode branch.
-  // Reverts unless addr owns token_id.
   private fn _check_is_owner(nft_contract: address, token_id: u128, addr: address): u128 {
     let current_owner = call(nft_contract, "owner_of", token_id)
     require(addr == current_owner, "xmarket: not token owner")
@@ -202,10 +195,15 @@ contract Xmarket_v3 {
     _log(entry)
   }
 
-  // =============================================================
-  // Listing
-  // =============================================================
-
+  //| Lists a token at a fixed price.
+  //| who      the token's owner or an address approved for it
+  //| holds    nothing moves; the token must stay transferable by this contract until it sells
+  //| reveals  the seller, the token and the price
+  //| logs     list|listing_id|seller|nft|token_id|price|epoch
+  //| in       nft_contract  collection address
+  //| in       token_id      token
+  //| in       price         price
+  //| out      listing id
   fn list_nft(nft_contract: address, token_id: u128, price: u128): u128 {
     require(is_address(nft_contract) && nft_contract != 0, "xmarket: invalid contract")
     require(price > 0, "xmarket: price > 0 required")
@@ -240,6 +238,12 @@ contract Xmarket_v3 {
     return id
   }
 
+  //| Cancels an active listing.
+  //| who      the seller or the contract owner
+  //| reveals  that the listing was cancelled
+  //| logs     cancel|listing_id|caller|epoch
+  //| in       listing_id  the listing
+  //| out      true
   fn cancel_listing(listing_id: u128): bool {
     require(listing_id < self.listing_count, "xmarket: bad listing id")
     require(self.listing_status[listing_id] == 1, "xmarket: not active")
@@ -261,6 +265,14 @@ contract Xmarket_v3 {
     return true
   }
 
+  //| Buys a listed token.
+  //| who      anyone but the seller
+  //| pays     at least the price, any excess returned; the price is credited to the seller, the creator and the fee
+  //| holds    the token moves from the seller to the buyer
+  //| reveals  the buyer and the price
+  //| logs     sale|listing_id|buyer|seller|nft|token_id|price|epoch
+  //| in       listing_id  the listing
+  //| out      true
   fn buy_nft(listing_id: u128): bool {
     require(listing_id < self.listing_count, "xmarket: bad listing id")
     require(self.listing_status[listing_id] == 1, "xmarket: not active")
@@ -281,10 +293,15 @@ contract Xmarket_v3 {
     return true
   }
 
-  // =============================================================
-  // Offers
-  // =============================================================
-
+  //| Makes an offer on one token.
+  //| who      anyone
+  //| pays     the attached value is the offer and is held here
+  //| reveals  the offerer, the token and the amount
+  //| logs     offer|offer_id|offerer|nft|token_id|amount|epoch
+  //| in       nft_contract     collection address
+  //| in       token_id         token
+  //| in       duration_epochs  lifetime in epochs
+  //| out      offer id
   fn make_offer(nft_contract: address, token_id: u128, duration_epochs: u128): u128 {
     require(is_address(nft_contract) && nft_contract != 0, "xmarket: invalid contract")
     require(value > 0, "xmarket: no value sent")
@@ -319,8 +336,15 @@ contract Xmarket_v3 {
     return id
   }
 
-  // quantity units at value/quantity OCT each; total escrow = value.
-  // value must divide evenly so unit_price * quantity == value exactly.
+  //| Makes an offer for any tokens of a collection.
+  //| who      anyone
+  //| pays     the attached value is held here and split evenly across quantity, which must divide it exactly
+  //| reveals  the offerer, the collection, the price per token and the quantity
+  //| logs     coffer|offer_id|offerer|nft|unit_price|quantity|epoch
+  //| in       nft_contract     collection address
+  //| in       duration_epochs  lifetime in epochs
+  //| in       quantity         tokens wanted, 1 to 100
+  //| out      offer id
   fn make_collection_offer(nft_contract: address, duration_epochs: u128, quantity: u128): u128 {
     require(is_address(nft_contract) && nft_contract != 0, "xmarket: invalid contract")
     require(value > 0, "xmarket: no value sent")
@@ -359,13 +383,16 @@ contract Xmarket_v3 {
     return id
   }
 
+  //| Cancels an offer.
+  //| who      the offerer
+  //| pays     the remaining value is credited to the offerer
+  //| in       offer_id  the offer
+  //| out      true
   fn cancel_offer(offer_id: u128): bool {
     require(offer_id < self.offer_count, "xmarket: bad offer id")
     require(self.offer_active[offer_id] == 1, "xmarket: not active")
     require(caller == self.offer_offerer[offer_id], "xmarket: not offerer")
 
-    // refund the remaining escrow: unit price * units not yet accepted.
-    // remaining only ever decreases, so the product is bounded by the originally escrowed value and cannot overflow.
     let remaining: u128 = self.offer_quantity[offer_id]
     require(remaining > 0, "xmarket: offer exhausted")
     let amount: u128 = self.offer_amount[offer_id] * remaining
@@ -390,7 +417,6 @@ contract Xmarket_v3 {
     let buyer        = self.offer_offerer[offer_id]
     require(seller != buyer, "xmarket: cannot accept own offer")
 
-    // settle one unit: decrement remaining, deactivate on the last one.
     let remaining: u128 = self.offer_quantity[offer_id]
     require(remaining >= 1, "xmarket: offer exhausted")
     let remaining_after: u128 = remaining - 1
@@ -399,8 +425,6 @@ contract Xmarket_v3 {
     require(self.offer_reserve >= price, "xmarket: offer reserve underflow")
     self.offer_reserve -= price
 
-    // The sold token may sit in an active listing, so close it and log the cancel.
-    // Status 0 is closed without a listing sale, because the trade itself is the osale below.
     let sentinel = self.contract_token_listing[nft_contract][token_id]
     if sentinel != 0 {
       let lid: u128 = sentinel - 1
@@ -438,7 +462,6 @@ contract Xmarket_v3 {
     let moved: bool = call(nft_contract, "transfer_from", seller, buyer, token_id)
     require(moved, "xmarket: nft transfer failed")
 
-    // sale| carries listing ids, osale| carries offer ids.
     let entry = concat("osale|", to_string(offer_id))
     entry = concat(entry, "|")
     entry = concat(entry, to_string(buyer))
@@ -457,6 +480,15 @@ contract Xmarket_v3 {
     _log(entry)
   }
 
+  //| Sells a token into an offer made on it.
+  //| who      the token's owner
+  //| when     until the offer expires
+  //| pays     the offer is credited to the seller, the creator and the fee
+  //| holds    the token moves to the offerer, and any listing of it is closed
+  //| reveals  the seller and the price
+  //| logs     osale|offer_id|buyer|seller|nft|token_id|price|remaining|epoch
+  //| in       offer_id  the offer
+  //| out      true
   fn accept_offer(offer_id: u128): bool {
     require(offer_id < self.offer_count, "xmarket: bad offer id")
     require(self.offer_active[offer_id] == 1, "xmarket: not active")
@@ -471,6 +503,16 @@ contract Xmarket_v3 {
     return true
   }
 
+  //| Sells one token into a collection offer.
+  //| who      the token's owner
+  //| when     until the offer expires
+  //| pays     one unit of the offer is credited to the seller, the creator and the fee
+  //| holds    the token moves to the offerer, and any listing of it is closed
+  //| reveals  the seller, the token and the price
+  //| logs     osale|offer_id|buyer|seller|nft|token_id|price|remaining|epoch
+  //| in       offer_id  the offer
+  //| in       token_id  token
+  //| out      true
   fn accept_collection_offer(offer_id: u128, token_id: u128): bool {
     require(offer_id < self.offer_count, "xmarket: bad offer id")
     require(self.offer_active[offer_id] == 1, "xmarket: not active")
@@ -484,10 +526,11 @@ contract Xmarket_v3 {
     return true
   }
 
-  // =============================================================
-  // Proceeds / admin
-  // =============================================================
-
+  //| Withdraws the caller's credit.
+  //| who      any address with a credit
+  //| pays     the full credit to the caller
+  //| reveals  the amount withdrawn
+  //| out      amount withdrawn
   fn claim_proceeds(): u128 {
     let amount = self.pending_proceeds[caller]
     require(amount > 0, "xmarket: nothing to claim")
@@ -497,6 +540,9 @@ contract Xmarket_v3 {
     return amount
   }
 
+  //| Sends the accrued fees to the contract owner.
+  //| who      the contract owner
+  //| out      amount withdrawn
   fn withdraw_fees(): u128 {
     only_owner()
     let amount = self.fee_balance
@@ -507,6 +553,10 @@ contract Xmarket_v3 {
     return amount
   }
 
+  //| Transfers contract ownership.
+  //| who      the contract owner
+  //| in       new_owner  new owner
+  //| out      true
   fn transfer_ownership(new_owner: address): bool {
     only_owner()
     require(is_address(new_owner) && new_owner != 0, "xmarket: invalid address")
@@ -514,9 +564,12 @@ contract Xmarket_v3 {
     return true
   }
 
-  // Flip a collection into (1) or out of (0) standard mode.
-  // Done once at onboarding for foreign ERC-721-shaped contracts, which must expose owner_of and get_approved.
-  // XNS-1 collections stay at the default 0.
+  //| Marks a collection that has no is_approved_or_owner, so it is checked with owner_of and get_approved instead.
+  //| who      the contract owner
+  //| logs     stdmode|nft|mode|epoch
+  //| in       nft_contract  collection address
+  //| in       mode          1 to mark, 0 to unmark
+  //| out      true
   fn set_standard_mode(nft_contract: address, mode: u128): bool {
     only_owner()
     require(is_address(nft_contract) && nft_contract != 0, "xmarket: invalid contract")
@@ -532,10 +585,9 @@ contract Xmarket_v3 {
     return true
   }
 
-  // =============================================================
-  // Views: single item
-  // =============================================================
-
+  //| A listing. status is 0 closed, 1 active, 2 sold.
+  //| in       listing_id  the listing
+  //| out      listing_id|seller|nft|token_id|price|status|epoch
   view fn get_listing(listing_id: u128): string {
     require(listing_id < self.listing_count, "xmarket: bad listing id")
     let out = to_string(listing_id)
@@ -554,6 +606,9 @@ contract Xmarket_v3 {
     return out
   }
 
+  //| An offer. amount is per token, and token_id is 0 for a collection offer.
+  //| in       offer_id  the offer
+  //| out      offer_id|offerer|nft|token_id|is_collection|amount|expires_epoch|active|quantity
   view fn get_offer(offer_id: u128): string {
     require(offer_id < self.offer_count, "xmarket: bad offer id")
     let out = to_string(offer_id)
@@ -576,32 +631,55 @@ contract Xmarket_v3 {
     return out
   }
 
+  //| Tokens still wanted by an offer.
+  //| in       offer_id  the offer
+  //| out      remaining quantity
   view fn get_offer_quantity(offer_id: u128): u128 {
     require(offer_id < self.offer_count, "xmarket: bad offer id")
     return self.offer_quantity[offer_id]
   }
 
+  //| Whether a collection is marked with set_standard_mode.
+  //| in       nft_contract  collection address
+  //| out      1 or 0
   view fn get_standard_mode(nft_contract: address): u128 {
     return self.standard_mode[nft_contract]
   }
 
+  //| Active listing of a token.
+  //| in       nft_contract  collection address
+  //| in       token_id      token
+  //| out      listing_id + 1, or 0 when not listed
   view fn get_token_listing(nft_contract: address, token_id: u128): u128 {
     return self.contract_token_listing[nft_contract][token_id]
   }
 
+  //| Credit an address can withdraw.
+  //| in       addr  the address
+  //| out      amount
   view fn get_pending_proceeds(addr: address): u128 {
     return self.pending_proceeds[addr]
   }
 
+  //| Listings ever created.
   view fn get_listing_count():  u128 { return self.listing_count }
+  //| Offers ever made.
   view fn get_offer_count():    u128 { return self.offer_count }
+  //| Active listings.
   view fn get_active_count():   u128 { return self.active_count }
+  //| Total value of all sales.
   view fn get_total_volume():   u128 { return self.total_volume }
+  //| Fees not yet withdrawn.
   view fn get_fee_balance():    u128 { return self.fee_balance }
+  //| Value held for credits.
   view fn get_reserve():        u128 { return self.reserve }
+  //| Value held for open offers.
   view fn get_offer_reserve():  u128 { return self.offer_reserve }
+  //| Contract owner.
   view fn get_owner():          address { return self.owner }
 
+  //| Contract totals.
+  //| out      listing_count|offer_count|active_count|total_volume|fee_balance|event_count
   view fn get_market_info(): string {
     let out = to_string(self.listing_count)
     out = concat(out, "|")
@@ -617,10 +695,10 @@ contract Xmarket_v3 {
     return out
   }
 
-  // =============================================================
-  // Views: paginated
-  // =============================================================
-
+  //| A page of active listings.
+  //| in       offset  first index
+  //| in       limit   page size, at most 100
+  //| out      active_count, then ~listing_id|seller|nft|token_id|price|epoch for each listing
   view fn get_listings_page(offset: u128, limit: u128): string {
     let total = self.active_count
     let out = to_string(total)
@@ -650,6 +728,11 @@ contract Xmarket_v3 {
     return out
   }
 
+  //| A page of active listings in one collection.
+  //| in       nft_contract  collection address
+  //| in       offset        first index
+  //| in       limit         page size, at most 100
+  //| out      active_count_in_collection, then ~listing_id|seller|token_id|price|epoch for each listing
   view fn get_listings_for_collection(nft_contract: address, offset: u128, limit: u128): string {
     let total = self.coll_count[nft_contract]
     let out = to_string(total)
@@ -677,6 +760,10 @@ contract Xmarket_v3 {
     return out
   }
 
+  //| A range of the event log. Each writing function lists the entry it writes.
+  //| in       from   first entry
+  //| in       count  entries, at most 50
+  //| out      event_count, then ~entry for each entry
   view fn get_event_log(from: u128, count: u128): string {
     let total = self.event_log_count
     let out = to_string(total)

@@ -1,0 +1,398 @@
+{
+  "contract": "Xlist",
+  "version": "v2.0.0",
+  "generated": "2026-10-30",
+  "chain": "octra mainnet",
+  "source_file": "contracts/xpectra/Xlist.aml",
+  "address": "oct6hqXn2kSm8HptJ3MRmRAbTaY4jvTHH2ntFcSWKdKhXzx",
+  "size": 9596,
+  "certificate": {
+    "schema": "aml_bytecode_certificate_v1",
+    "compiler": "octra_aml",
+    "compiler_version": "1.0 Rehovot",
+    "verification_schema": "aml_safety_report_v1",
+    "source_mode": "single",
+    "source_hash": "353800e041360998dd3f5c8a2b017de9401e203cbdea4c78e88e0d7f0a28b268",
+    "bytecode_hash": "57b1c272415bf190d88ab8691a5b6d6b0af5afd3682225a7fdc01ba6b810c937",
+    "verification_hash": "b74932873df9c0a2c150f0a10bd175a272f65d0ceb0fd49d09a6be08700650a4"
+  },
+  "verification": {
+    "schema": "aml_safety_report_v1",
+    "engine": "aml_ast_verifier",
+    "proof_model": "formal/coq/aml_value_safety_model.v",
+    "proof_gate": "scripts/check_aml_formal.sh",
+    "program_name": "Xlist_v2",
+    "verified": true,
+    "safety": "safe",
+    "errors": 0,
+    "warnings": 0,
+    "trace": [
+      {
+        "code": "signed_value_storage",
+        "title": "value-like storage must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_parameter",
+        "title": "value-moving public parameters must not use signed int",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "signed_value_flow",
+        "title": "signed values must not flow into value-like storage writes",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_arithmetic_range_not_proven",
+        "title": "unsigned arithmetic writes must prove range safety",
+        "status": "pass",
+        "severity": "error",
+        "findings": 0
+      },
+      {
+        "code": "supply_invariant_unproven",
+        "title": "balance and total supply writes should preserve conservation",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      },
+      {
+        "code": "unsigned_parameter_without_positive_guard",
+        "title": "unsigned value parameters should reject zero unless zero is meaningful",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      },
+      {
+        "code": "unchecked_transfer_result",
+        "title": "native transfer result should be checked",
+        "status": "pass",
+        "severity": "warning",
+        "findings": 0
+      }
+    ],
+    "function_summaries": [
+      {
+        "name": "only_operator",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "only_initialized",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "_index_add",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [
+          "member_count",
+          "member_index",
+          "member_pos"
+        ],
+        "transitive_writes": [
+          "member_count",
+          "member_index",
+          "member_pos"
+        ],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "_index_remove",
+        "visibility": "private",
+        "direct_calls": [],
+        "direct_writes": [
+          "member_count",
+          "member_index",
+          "member_pos"
+        ],
+        "transitive_writes": [
+          "member_count",
+          "member_index",
+          "member_pos"
+        ],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "init",
+        "visibility": "public",
+        "direct_calls": [
+          "is_address",
+          "only_operator"
+        ],
+        "direct_writes": [
+          "collection_addr",
+          "initialized"
+        ],
+        "transitive_writes": [
+          "collection_addr",
+          "initialized"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "set_operator",
+        "visibility": "public",
+        "direct_calls": [
+          "is_address",
+          "only_operator"
+        ],
+        "direct_writes": [
+          "operator"
+        ],
+        "transitive_writes": [
+          "operator"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "update_collection",
+        "visibility": "public",
+        "direct_calls": [
+          "is_address",
+          "only_initialized",
+          "only_operator"
+        ],
+        "direct_writes": [
+          "collection_addr"
+        ],
+        "transitive_writes": [
+          "collection_addr"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "add",
+        "visibility": "public",
+        "direct_calls": [
+          "_index_add",
+          "is_address",
+          "only_initialized",
+          "only_operator"
+        ],
+        "direct_writes": [
+          "lists"
+        ],
+        "transitive_writes": [
+          "lists",
+          "member_count",
+          "member_index",
+          "member_pos"
+        ],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "remove",
+        "visibility": "public",
+        "direct_calls": [
+          "_index_remove",
+          "is_address",
+          "only_initialized",
+          "only_operator"
+        ],
+        "direct_writes": [
+          "lists"
+        ],
+        "transitive_writes": [
+          "lists",
+          "member_count",
+          "member_index",
+          "member_pos"
+        ],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "add_batch",
+        "visibility": "public",
+        "direct_calls": [
+          "_index_add",
+          "is_address",
+          "only_initialized",
+          "only_operator"
+        ],
+        "direct_writes": [
+          "lists"
+        ],
+        "transitive_writes": [
+          "lists",
+          "member_count",
+          "member_index",
+          "member_pos"
+        ],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "remove_batch",
+        "visibility": "public",
+        "direct_calls": [
+          "_index_remove",
+          "is_address",
+          "only_initialized",
+          "only_operator"
+        ],
+        "direct_writes": [
+          "lists"
+        ],
+        "transitive_writes": [
+          "lists",
+          "member_count",
+          "member_index",
+          "member_pos"
+        ],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "nuke",
+        "visibility": "public",
+        "direct_calls": [
+          "only_initialized",
+          "only_operator"
+        ],
+        "direct_writes": [
+          "lists",
+          "member_count",
+          "member_pos"
+        ],
+        "transitive_writes": [
+          "lists",
+          "member_count",
+          "member_pos"
+        ],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "is_whitelisted",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "check",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "get_whitelist_page",
+        "visibility": "public",
+        "direct_calls": [
+          "concat",
+          "to_string"
+        ],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num",
+          "offset",
+          "limit"
+        ]
+      },
+      {
+        "name": "get_member_count",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": [
+          "phase_num"
+        ]
+      },
+      {
+        "name": "get_collection",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "get_operator",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [],
+        "transitive_writes": [],
+        "value_writes": [],
+        "signed_params": []
+      },
+      {
+        "name": "constructor",
+        "visibility": "public",
+        "direct_calls": [],
+        "direct_writes": [
+          "initialized",
+          "operator"
+        ],
+        "transitive_writes": [
+          "initialized",
+          "operator"
+        ],
+        "value_writes": [],
+        "signed_params": []
+      }
+    ],
+    "invariants": [
+      {
+        "code": "supply_balance_conservation",
+        "kind": "derived",
+        "status": "not_applicable",
+        "expression": null,
+        "message": "program does not expose both balance and supply storage",
+        "fields": [],
+        "functions": []
+      }
+    ],
+    "findings": []
+  }
+}

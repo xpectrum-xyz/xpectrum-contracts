@@ -1,9 +1,10 @@
 {
   "contract": "Xincinerator",
   "version": "v1.0.0",
-  "generated": "2026-09-04",
+  "generated": "2026-10-30",
   "chain": "octra mainnet",
-  "source_file": "contracts/Xincinerator.aml",
+  "source_file": "contracts/xpectra/Xincinerator.aml",
+  "address": "octGn3QwHTcGjo6Vjz5G9y8Z9hZDsYoA7gbksRqdJoaeg6q",
   "size": 285,
   "certificate": {
     "schema": "aml_bytecode_certificate_v1",
@@ -11,7 +12,7 @@
     "compiler_version": "1.0 Rehovot",
     "verification_schema": "aml_safety_report_v1",
     "source_mode": "single",
-    "source_hash": "0639891ca377e66915ffa855344734e7668e2499c726889f63824743e9912d1a",
+    "source_hash": "7669aa47d04164974dbd95e0149f8e1cde3fcbec80d459316b1764b07d5618ce",
     "bytecode_hash": "de1ce6aa8673bf6c670bdc6bf1f6a0de60dfb8b6db0ebad61e9683ddecea1977",
     "verification_hash": "a0162880fd94efded951cb5723950158f47c527ec0d9e18f8f964c32c0b5de68"
   },
@@ -121,6 +122,5 @@
       }
     ],
     "findings": []
-  },
-  "abi": "{\"functions\":[{\"name\":\"get_version\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false},{\"name\":\"get_deployed_epoch\",\"inputs\":[],\"output\":\"bytes\",\"view\":true,\"payable\":false}],\"events\":[]}"
+  }
 }

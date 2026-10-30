@@ -1,10 +1,16 @@
-// XpectrumGenesis: the root collection, deployed on mainnet as Xpectra.
-// 3-phase mint (GTD, FCFS, public), reveal, holder enumeration, pull-based proceeds, circle resources.
-// Token ids are 0-indexed, so the first mint is id 0.
-// No xholder mint and no reserve of its own: this is the collection a reserve is granted against, not one that receives it.
-// No burn, so supply is fixed at what was minted and total_supply never moves.
-//
-// get_contract_info >> name | symbol | total_supply | max_supply | royalty_bps | owner | revealed
+// SPDX-License-Identifier: MIT
+
+//| XpectrumGenesis
+//| The root Xpectrum collection, deployed on mainnet as Xpectra.
+//|
+//| model    a three-phase mint (guaranteed, first come, public) against one allowlist contract; holding a token is what other collections check for their holder reserve
+//| custody  tokens are recorded against their owner; there is no burn, so supply is fixed at what was minted
+//| payout   mint revenue is credited 97.5% to the owner and 2.5% to the platform wallet and withdrawn with claim_proceeds
+//| privacy  owners, approvals, mints with their phase and price, and every transfer are public state
+//| units    amounts in micro-OCT (1 OCT = 1,000,000), royalties in basis points, time in epochs
+//| roles    owner is the creator; admin and the platform wallet start as the platform address; the trusted factory is the deployer
+//| version  1.0.1
+//| license  MIT
 
 contract XpectrumGenesis {
 
@@ -13,29 +19,53 @@ contract XpectrumGenesis {
     minted_epoch: u128
   }
 
+  //| Written once, by init.
   event Initialized(owner: address, name: string, max_supply: u128)
+  //| Written for each token minted, with its phase and unit price.
   event Minted(minter: address, token_id: u128, phase: u128, price: u128)
+  //| Written for each token airdropped.
   event Airdropped(recipient: address, token_id: u128)
+  //| Written on mint and airdrop (from 0) and on every transfer.
   event Transferred(token_id: u128, from: address, to: address)
+  //| Written when a token approval is set.
   event Approved(token_id: u128, approved: address)
+  //| Written when a token approval is cleared.
   event ApprovalRevoked(token_id: u128)
+  //| Written when an operator is granted or revoked.
   event OperatorSet(owner: address, operator: address, approved: u128)
+  //| Written when the collection is revealed.
   event Revealed(base_uri: string)
+  //| Written when the base uri changes after reveal.
   event BaseUriUpdated(base_uri: string)
+  //| Written when a collection circle resource is added or replaced.
   event CollectionCircleResourceSet(resource_id: u128, base_uri: string, suffix: string, unrevealed_uri: string, access: string)
+  //| Written when a collection circle resource is cleared.
   event CollectionCircleResourceCleared(resource_id: u128)
+  //| Written when a phase is forced open.
   event PhaseOverrideSet(phase: u128)
+  //| Written when the forced phase is removed.
   event PhaseOverrideCleared()
+  //| Written when proceeds are withdrawn.
   event ProceedsClaimed(recipient: address, amount: u128)
+  //| Written when the platform wallet changes.
   event XpectrumWalletUpdated(new_wallet: address)
+  //| Written when the owner changes.
   event OwnershipTransferred(old_owner: address, new_owner: address)
+  //| Written when the unrevealed uri changes.
   event UnrevealedUriSet(uri: string)
+  //| Written when minting is paused.
   event Paused()
+  //| Written when minting resumes.
   event Unpaused()
+  //| Written when phase prices change.
   event PhasePriceUpdated(gtd: u128, fcfs: u128, pub: u128)
+  //| Written when phase caps change.
   event PhaseCapUpdated(gtd_cap: u128, fcfs_cap: u128, pub_cap: u128)
+  //| Written when per-phase wallet caps change.
   event PhaseWalletCapUpdated(gtd_wallet: u128, fcfs_wallet: u128, pub_wallet: u128)
+  //| Written when the phase schedule changes.
   event PhaseEpochsUpdated(gtd_start: u128, gtd_end: u128, fcfs_start: u128, fcfs_end: u128, pub_start: u128, pub_end: u128)
+  //| Written when the trusted factory changes.
   event TrustedFactoryUpdated(new_factory: address)
 
   const PLATFORM_FEE_BPS: u128 = 250
@@ -103,7 +133,7 @@ contract XpectrumGenesis {
     event_log_count: u128
     trusted_factory: address
 
-    // holder enumeration index (swap-and-pop)
+    // holder enumeration
     holder_list:  map[u128]address
     holder_pos:   map[address]u128
     holder_count: u128
@@ -234,6 +264,22 @@ contract XpectrumGenesis {
     self.event_log_count += 1
   }
 
+  //| Configures the collection. Callable once.
+  //| who      the deployer, who becomes the trusted factory; ownership passes to creator
+  //| logs     Initialized
+  //| in       collection_name            name
+  //| in       collection_symbol          symbol
+  //| in       collection_unrevealed_uri  uri every token reports before reveal
+  //| in       collection_max_supply      supply ceiling, above 0
+  //| in       collection_royalty_bps     royalty, at most 1000
+  //| in       collection_max_per_wallet  mints per wallet across all phases, above 0
+  //| in       xpectrum_addr              platform address, set as admin and platform wallet
+  //| in       creator                    owner and royalty receiver
+  //| in       xlist                      allowlist contract
+  //| in       gtd_wallet                 guaranteed phase wallet cap, above 0
+  //| in       fcfs_wallet                first come phase wallet cap, above 0
+  //| in       pub_wallet                 public phase wallet cap, above 0
+  //| out      true
   fn init(
     collection_name: string,
     collection_symbol: string,
@@ -279,6 +325,8 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Phase open at the current epoch, or the forced phase.
+  //| out      0 guaranteed, 1 first come, 2 public, 3 closed
   view fn get_current_phase(): u128 {
     if self.phase_override_active == 1 {
       return self.phase_override_value
@@ -289,6 +337,15 @@ contract XpectrumGenesis {
     return 3
   }
 
+  //| Mints up to five tokens in the open phase.
+  //| who      anyone in the public phase; an address on the phase's allowlist in phases 0 and 1
+  //| pays     price times quantity attached; any excess is returned in the same call
+  //| when     while a phase is open and minting is not paused
+  //| holds    the tokens are recorded against the caller
+  //| reveals  the minter, the token ids, the phase and the price
+  //| logs     Minted and Transferred per token, and mint|id|to|phase|price|epoch in the event log
+  //| in       quantity  1 to 5, within the supply, phase and wallet caps
+  //| out      true
   fn mint(quantity: u128): bool {
     only_initialized()
     require(self.paused == 0, "genesis: minting paused")
@@ -364,6 +421,13 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Mints tokens directly to up to 20 addresses. All or nothing.
+  //| who      the owner
+  //| holds    each token is recorded against its recipient
+  //| logs     Airdropped and Transferred per token
+  //| in       addr_0..addr_19  recipients; the first count must be valid, the rest are ignored
+  //| in       count            1 to 20
+  //| out      true
   fn airdrop(
     addr_0: address, addr_1: address, addr_2: address, addr_3: address,
     addr_4: address, addr_5: address, addr_6: address, addr_7: address,
@@ -446,6 +510,13 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Transfers a token from the caller.
+  //| who      the token's owner
+  //| holds    the token moves to to and its approval is cleared
+  //| logs     Transferred, and xfer|id|from|to|epoch in the event log
+  //| in       to        recipient, not the current owner
+  //| in       token_id  the token
+  //| out      true
   fn transfer(to: address, token_id: u128): bool {
     only_initialized()
     require(token_id < self.total_minted, "genesis: token not found")
@@ -469,6 +540,14 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Transfers a token on the owner's behalf.
+  //| who      the owner, the token's approved address, or an operator of the owner
+  //| holds    the token moves to to and its approval is cleared
+  //| logs     Transferred, and xfer|id|from|to|epoch in the event log
+  //| in       from      the current owner
+  //| in       to        recipient, not the current owner
+  //| in       token_id  the token
+  //| out      true
   fn transfer_from(from: address, to: address, token_id: u128): bool {
     only_initialized()
     require(token_id < self.total_minted, "genesis: token not found")
@@ -500,6 +579,12 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Approves one address to transfer a token.
+  //| who      the token's owner or an operator of the owner
+  //| logs     Approved
+  //| in       approved  the address approved, not 0
+  //| in       token_id  the token
+  //| out      true
   fn approve(approved: address, token_id: u128): bool {
     only_initialized()
     require(token_id < self.total_minted, "genesis: token not found")
@@ -514,6 +599,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Clears a token's approval.
+  //| who      the token's owner or an operator of the owner
+  //| logs     ApprovalRevoked, when an approval existed
+  //| in       token_id  the token
+  //| out      true
   fn revoke_approval(token_id: u128): bool {
     only_initialized()
     require(token_id < self.total_minted, "genesis: token not found")
@@ -529,6 +619,12 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Grants or revokes an operator for all of the caller's tokens.
+  //| who      any holder
+  //| logs     OperatorSet
+  //| in       operator  the operator, not the caller
+  //| in       approved  1 grant, 0 revoke
+  //| out      true
   fn set_operator(operator: address, approved: u128): bool {
     only_initialized()
     require(operator != caller, "genesis: cannot self-operate")
@@ -540,6 +636,12 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Withdraws the caller's credited mint proceeds.
+  //| who      any address with a credited balance
+  //| pays     the full credited balance to the caller
+  //| reveals  the caller and the amount
+  //| logs     ProceedsClaimed
+  //| out      true
   fn claim_proceeds(): bool {
     only_initialized()
     let amount = self.pending_proceeds[caller]
@@ -552,6 +654,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Reveals the collection. Every token_uri becomes base uri + id + .json.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     Revealed
+  //| in       uri  base uri
+  //| out      true
   fn reveal(uri: string): bool {
     only_initialized()
     only_owner_or_admin()
@@ -561,6 +668,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Replaces the base uri.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     BaseUriUpdated
+  //| in       uri  base uri
+  //| out      true
   fn update_base_uri(uri: string): bool {
     only_initialized()
     only_owner_or_admin()
@@ -569,6 +681,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Replaces the uri reported before reveal.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     UnrevealedUriSet
+  //| in       uri  unrevealed uri
+  //| out      true
   fn set_unrevealed_uri(uri: string): bool {
     only_initialized()
     only_owner_or_admin()
@@ -577,6 +694,14 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Adds a collection circle resource, resolved per token as base_uri + id + suffix.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     CollectionCircleResourceSet
+  //| in       base_uri        resource prefix
+  //| in       suffix          resource suffix
+  //| in       unrevealed_uri  resource before reveal, or empty
+  //| in       access          a client hint, not enforced
+  //| out      the new resource id
   fn add_collection_circle_resource(base_uri: string, suffix: string, unrevealed_uri: string, access: string): u128 {
     only_initialized()
     only_owner_or_admin()
@@ -592,6 +717,15 @@ contract XpectrumGenesis {
     return resource_id
   }
 
+  //| Replaces a collection circle resource and marks it active.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     CollectionCircleResourceSet
+  //| in       resource_id     the resource
+  //| in       base_uri        resource prefix
+  //| in       suffix          resource suffix
+  //| in       unrevealed_uri  resource before reveal, or empty
+  //| in       access          a client hint, not enforced
+  //| out      true
   fn set_collection_circle_resource(resource_id: u128, base_uri: string, suffix: string, unrevealed_uri: string, access: string): bool {
     only_initialized()
     only_owner_or_admin()
@@ -606,6 +740,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Clears a collection circle resource.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     CollectionCircleResourceCleared
+  //| in       resource_id  the resource
+  //| out      true
   fn clear_collection_circle_resource(resource_id: u128): bool {
     only_initialized()
     only_owner_or_admin()
@@ -620,6 +759,13 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Sets the unit price of each phase.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     PhasePriceUpdated
+  //| in       gtd        guaranteed price
+  //| in       fcfs       first come price
+  //| in       pub_price  public price
+  //| out      true
   fn update_phase_prices(gtd: u128, fcfs: u128, pub_price: u128): bool {
     only_initialized()
     only_owner_or_admin()
@@ -630,6 +776,13 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Sets each phase's supply cap. No cap may fall below what that phase has minted, and caps plus airdrops may not exceed max supply.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     PhaseCapUpdated
+  //| in       gtd_cap   guaranteed cap
+  //| in       fcfs_cap  first come cap
+  //| in       pub_cap   public cap
+  //| out      true
   fn update_phase_caps(gtd_cap: u128, fcfs_cap: u128, pub_cap: u128): bool {
     only_initialized()
     only_owner_or_admin()
@@ -647,6 +800,13 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Sets each phase's per-wallet cap.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     PhaseWalletCapUpdated
+  //| in       gtd_wallet   guaranteed cap, above 0
+  //| in       fcfs_wallet  first come cap, above 0
+  //| in       pub_wallet   public cap, above 0
+  //| out      true
   fn update_phase_wallet_caps(gtd_wallet: u128, fcfs_wallet: u128, pub_wallet: u128): bool {
     only_initialized()
     only_owner_or_admin()
@@ -658,6 +818,16 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Sets the phase schedule. Phases run in order without overlap, each at least 360 epochs, guaranteed and first come at most 259200. First come is skipped when its start equals its end.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     PhaseEpochsUpdated
+  //| in       gtd_start   guaranteed opens
+  //| in       gtd_end     guaranteed closes
+  //| in       fcfs_start  first come opens
+  //| in       fcfs_end    first come closes
+  //| in       pub_start   public opens
+  //| in       pub_end     public closes
+  //| out      true
   fn update_phase_epochs(
     gtd_start: u128, gtd_end: u128,
     fcfs_start: u128, fcfs_end: u128,
@@ -700,6 +870,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Forces a phase open regardless of the schedule.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     PhaseOverrideSet
+  //| in       phase_num  0, 1 or 2
+  //| out      true
   fn set_phase_override(phase_num: u128): bool {
     only_initialized()
     only_owner_or_admin()
@@ -710,6 +885,10 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Returns phase selection to the schedule.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     PhaseOverrideCleared
+  //| out      true
   fn clear_phase_override(): bool {
     only_initialized()
     only_owner_or_admin()
@@ -719,6 +898,10 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Pauses minting.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     Paused
+  //| out      true
   fn pause(): bool {
     only_initialized()
     only_owner_or_admin()
@@ -727,6 +910,10 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Resumes minting.
+  //| who      the owner, the admin or the trusted factory
+  //| logs     Unpaused
+  //| out      true
   fn unpause(): bool {
     only_initialized()
     only_owner_or_admin()
@@ -735,6 +922,10 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Sets the cap on mints per wallet across all phases.
+  //| who      the owner, the admin or the trusted factory
+  //| in       max_val  the cap, above 0
+  //| out      true
   fn set_max_per_wallet(max_val: u128): bool {
     only_initialized()
     only_owner_or_admin()
@@ -743,6 +934,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Moves the platform wallet that receives the 2.5% mint fee.
+  //| who      the admin
+  //| logs     XpectrumWalletUpdated
+  //| in       new_wallet  the new wallet
+  //| out      true
   fn update_xpectrum_wallet(new_wallet: address): bool {
     only_initialized()
     require(caller == self.admin, "genesis: only admin")
@@ -752,6 +948,10 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Hands the admin role to a new address.
+  //| who      the admin
+  //| in       new_admin  the new admin
+  //| out      true
   fn update_admin(new_admin: address): bool {
     only_initialized()
     require(caller == self.admin, "genesis: only admin")
@@ -760,6 +960,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Sets the trusted factory, which shares the owner's configuration rights. 0 removes it.
+  //| who      the admin
+  //| logs     TrustedFactoryUpdated
+  //| in       new_factory  the factory, or 0
+  //| out      true
   fn set_trusted_factory(new_factory: address): bool {
     only_initialized()
     require(caller == self.admin, "genesis: only admin")
@@ -769,6 +974,10 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Moves the address reported by creator_of, which marketplaces pay royalties to.
+  //| who      the royalty receiver or the owner
+  //| in       new_receiver  the new receiver
+  //| out      true
   fn update_royalty_receiver(new_receiver: address): bool {
     only_initialized()
     require(
@@ -780,6 +989,11 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Hands the collection to a new owner. Proceeds already credited stay with the old owner.
+  //| who      the owner
+  //| logs     OwnershipTransferred
+  //| in       new_owner  the new owner
+  //| out      true
   fn transfer_ownership(new_owner: address): bool {
     only_initialized()
     require(caller == self.owner, "genesis: not owner")
@@ -790,6 +1004,10 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Points the collection at a different allowlist contract.
+  //| who      the admin
+  //| in       new_xlist  the allowlist contract
+  //| out      true
   fn update_xlist(new_xlist: address): bool {
     only_initialized()
     require(caller == self.admin, "genesis: only admin")
@@ -798,21 +1016,33 @@ contract XpectrumGenesis {
     return true
   }
 
+  //| Owner of a token.
+  //| in       token_id  the token
+  //| out      address
   view fn owner_of(token_id: u128): address {
     require(token_id < self.total_minted, "genesis: token not found")
     return self.tokens[token_id].owner
   }
 
+  //| Royalty receiver for a token. The same for every token.
+  //| in       token_id  the token
+  //| out      address
   view fn creator_of(token_id: u128): address {
     require(token_id < self.total_minted, "genesis: token not found")
     return self.royalty_receiver
   }
 
+  //| Royalty for a token. The same for every token.
+  //| in       token_id  the token
+  //| out      basis points
   view fn royalty_of(token_id: u128): u128 {
     require(token_id < self.total_minted, "genesis: token not found")
     return self.royalty_bps
   }
 
+  //| Metadata uri of a token.
+  //| in       token_id  the token
+  //| out      base uri + id + .json after reveal, the unrevealed uri before it
   view fn token_uri(token_id: u128): string {
     require(token_id < self.total_minted, "genesis: token not found")
     if self.revealed == 1 {
@@ -824,15 +1054,24 @@ contract XpectrumGenesis {
     return self.unrevealed_uri
   }
 
+  //| Number of collection circle resources, including cleared ones.
+  //| out      count
   view fn collection_circle_count(): u128 {
     return self.circle_resource_count
   }
 
+  //| Number of circle resources a token resolves. The same for every token.
+  //| in       token_id  the token
+  //| out      count
   view fn token_circle_count(token_id: u128): u128 {
     require(token_id < self.total_minted, "genesis: token not found")
     return self.circle_resource_count
   }
 
+  //| Circle resource uri for a token.
+  //| in       token_id     the token
+  //| in       resource_id  the resource
+  //| out      the unrevealed resource before reveal, else base_uri + id + suffix; empty when cleared
   view fn token_circle_uri(token_id: u128, resource_id: u128): string {
     require(token_id < self.total_minted, "genesis: token not found")
     require(resource_id < self.circle_resource_count, "genesis: circle resource not found")
@@ -851,32 +1090,51 @@ contract XpectrumGenesis {
     return uri
   }
 
+  //| Collection name for a token.
+  //| in       token_id  the token
+  //| out      name
   view fn collection_of(token_id: u128): string {
     require(token_id < self.total_minted, "genesis: token not found")
     return self.name
   }
 
+  //| Number of tokens an address holds.
+  //| in       addr  the address
+  //| out      count
   view fn balance_of(addr: address): u128 {
     return self.balances[addr]
   }
 
+  //| Approved address of a token.
+  //| in       token_id  the token
+  //| out      address, or 0 for none
   view fn get_approved(token_id: u128): address {
     require(token_id < self.total_minted, "genesis: token not found")
     return self.approvals[token_id]
   }
 
+  //| Tokens minted. There is no burn, so this is also live supply.
+  //| out      count
   view fn total_supply(): u128 {
     return self.total_minted
   }
 
+  //| Collection name.
+  //| out      name
   view fn collection_name(): string {
     return self.name
   }
 
+  //| Collection symbol.
+  //| out      symbol
   view fn symbol(): string {
     return self.symbol
   }
 
+  //| Whether an address may transfer a token. Xmarket requires this to return 1.
+  //| in       token_id  the token
+  //| in       addr      the address
+  //| out      1 owner, approved or operator; 0 otherwise
   view fn is_approved_or_owner(token_id: u128, addr: address): u128 {
     require(addr != 0, "genesis: zero address")
     require(token_id < self.total_minted, "genesis: token not found")
@@ -887,18 +1145,29 @@ contract XpectrumGenesis {
     return 0
   }
 
+  //| Mints by an address across all phases.
+  //| in       addr  the address
+  //| out      count
   view fn get_minted_by_wallet(addr: address): u128 {
     return self.minted_per_wallet[addr]
   }
 
+  //| Proceeds credited to an address and not yet claimed.
+  //| in       addr  the address
+  //| out      amount
   view fn get_pending_proceeds(addr: address): u128 {
     return self.pending_proceeds[addr]
   }
 
+  //| OCT held for credited proceeds.
+  //| out      amount
   view fn get_reserve(): u128 {
     return self.reserve
   }
 
+  //| Summary of a token.
+  //| in       token_id  the token
+  //| out      id|owner|creator|name|royalty_bps|minted_epoch|uri
   view fn get_token_info(token_id: u128): string {
     require(token_id < self.total_minted, "genesis: token not found")
     let uri = self.unrevealed_uri
@@ -922,6 +1191,10 @@ contract XpectrumGenesis {
     return out
   }
 
+  //| Circle resource record for a token.
+  //| in       token_id     the token
+  //| in       resource_id  the resource
+  //| out      token_id|resource_id|uri|access|active|version, version is 1
   view fn get_token_circle_info(token_id: u128, resource_id: u128): string {
     require(token_id < self.total_minted, "genesis: token not found")
     require(resource_id < self.circle_resource_count, "genesis: circle resource not found")
@@ -939,6 +1212,9 @@ contract XpectrumGenesis {
     return out
   }
 
+  //| Collection circle resource record.
+  //| in       resource_id  the resource
+  //| out      resource_id|base_uri|suffix|unrevealed_uri|access|active|version, version is 1
   view fn get_collection_circle_info(resource_id: u128): string {
     require(resource_id < self.circle_resource_count, "genesis: circle resource not found")
 
@@ -957,6 +1233,8 @@ contract XpectrumGenesis {
     return out
   }
 
+  //| Summary of the collection.
+  //| out      name|symbol|total_supply|max_supply|royalty_bps|owner|revealed
   view fn get_contract_info(): string {
     let out = self.name
     out = concat(out, "|")
@@ -974,6 +1252,8 @@ contract XpectrumGenesis {
     return out
   }
 
+  //| Schedule, prices and counts of all three phases.
+  //| out      gtd_price|gtd_start|gtd_end|gtd_cap|gtd_minted|gtd_wallet_cap|fcfs_price|fcfs_start|fcfs_end|fcfs_cap|fcfs_minted|fcfs_wallet_cap|pub_price|pub_start|pub_end|pub_cap|pub_minted|pub_wallet_cap
   view fn get_phase_info(): string {
     let out = to_string(self.gtd_price)
     out = concat(out, "|")
@@ -1013,6 +1293,9 @@ contract XpectrumGenesis {
     return out
   }
 
+  //| Mint state for one wallet.
+  //| in       wallet  the wallet
+  //| out      paused|phase|minted_by_wallet|wl_gtd|wl_fcfs|pending_proceeds
   view fn get_wallet_state(wallet: address): string {
     let phase = get_current_phase()
     let wl_gtd = call(self.xlist_addr, "check", 0, wallet)
@@ -1031,6 +1314,11 @@ contract XpectrumGenesis {
     return out
   }
 
+  //| Page of the token ids a wallet holds.
+  //| in       wallet  the wallet
+  //| in       offset  first index
+  //| in       limit   ids wanted, at most 500
+  //| out      total|id|id...
   view fn tokens_of(wallet: address, offset: u128, limit: u128): string {
     let total = self.owner_token_count[wallet]
     let out = to_string(total)
@@ -1047,6 +1335,10 @@ contract XpectrumGenesis {
     return out
   }
 
+  //| Page of all tokens.
+  //| in       offset  first token id
+  //| in       limit   tokens wanted, at most 100
+  //| out      total~id|owner|uri~id|owner|uri...
   view fn get_tokens_page(offset: u128, limit: u128): string {
     let total = self.total_minted
     let safe_limit = limit
@@ -1072,7 +1364,10 @@ contract XpectrumGenesis {
     return out
   }
 
-  // Returns: total|addr0:balance0|addr1:balance1|...  (owner/admin gated)
+  //| Page of holders with their balances. Owner or admin only.
+  //| in       offset  first holder index
+  //| in       limit   holders wanted, at most 200
+  //| out      total|addr:balance|addr:balance...
   view fn get_holders_page(offset: u128, limit: u128): string {
     require(caller == self.owner || caller == self.admin, "genesis: not authorized")
     let total = self.holder_count
@@ -1094,6 +1389,10 @@ contract XpectrumGenesis {
     return out
   }
 
+  //| Page of the event log.
+  //| in       from   first entry index
+  //| in       count  entries wanted, at most 50
+  //| out      total~entry~entry..., entries mint|id|to|phase|price|epoch and xfer|id|from|to|epoch
   view fn get_event_log(from: u128, count: u128): string {
     let total = self.event_log_count
     let out = to_string(total)
