@@ -3,14 +3,12 @@
   <img alt="Xpectrum contracts" src=".github/assets/banner-contracts-light.svg" width="100%">
 </picture>
 
-**[Marketplace](https://app.xpectrum.xyz)** | [Creators](https://creators.xpectrum.xyz) | [Docs](https://docs.xpectrum.xyz) | [Changelog](./CHANGELOG.md) | [Octrascan](https://octrascan.io)
+The smart contracts behind Xpectrum on Octra mainnet, written in AML.
+Each source file compiles to the exact bytecode deployed at its address.
 
-The contracts behind Xpectrum on Octra mainnet: the NFT standard, the launch factory and its collections, four ways to trade, and the Xpectra collection.
-Every file here compiles to the exact bytecode running at its address, and [`scripts/verify.sh`](./scripts/verify.sh) proves it against a node in about a minute, with no wallet and no fee.
+[Documentation](https://docs.xpectrum.xyz) · [Changelog](./CHANGELOG.md) · [Octrascan](https://octrascan.io)
 
 ## Deployments
-
-Octra mainnet. Every address links to Octrascan.
 
 | Contract | Version | Address | Purpose |
 |---|---|---|---|
@@ -32,49 +30,16 @@ New launches go through 4.0.0.
 
 The same list is machine-readable in [`deployments.json`](./deployments.json), with each contract's bytecode hash and certificate path.
 
-## Architecture
+## Verification
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/architecture-dark.svg">
-  <img alt="How the Xpectrum contracts call each other" src=".github/assets/architecture-light.svg" width="100%">
-</picture>
+```sh
+scripts/verify.sh           # recompile every source and compare it with its certificate
+scripts/verify.sh --live    # also compare each deployed contract with the code on chain
+```
 
-Every arrow is a cross-contract call that appears in the source.
-
-**Launch.** `XuperFactory.create_collection` deploys an Xcollection with every setting passed to its constructor, so a collection never exists half configured.
-The collection runs its own sale: Xpectra holders first, up to four listed phases, public last.
-A paid mint sends the 2.5% platform fee and the creator's proceeds in the same transaction, so the collection holds no OCT between calls.
-Listed phases read membership from Xlist, where each collection owns its lists.
-
-**Collections.** Anything that implements XNS-1 can be traded on the four market contracts without registration.
-Xcollection and XpectrumGenesis are the two implementations in production.
-
-**Trading.** Xmarket, Xauction, Xdutch and Xenglish read ownership, approval, creator and royalty from the collection and move the token with `transfer_from`.
-Each takes a 2.5% fee and pays the collection's royalty, capped at 10%, at settlement.
-Proceeds, royalties and refunds are credited inside the market contract and withdrawn with `claim_proceeds`.
-
-## XNS-1
-
-XNS-1 is the token interface every Xpectrum collection speaks.
-The market contracts depend on five entry points, and these must match exactly:
-
-| Entry point | Signature | Returns |
-|---|---|---|
-| `owner_of` | `(token_id: u128)` | the owner |
-| `is_approved_or_owner` | `(token_id: u128, addr: address)` | `u128`, `1` or `0` |
-| `creator_of` | `(token_id: u128)` | the royalty recipient |
-| `royalty_of` | `(token_id: u128)` | `u128` basis points, at most `1000` |
-| `transfer_from` | `(from: address, to: address, token_id: u128)` | moves the token |
-
-`is_approved_or_owner` returns `u128`, not `bool`.
-Settlement runs `require(approved == 1)`, which a `bool` can never satisfy, so a contract that returns `bool` compiles, verifies and then fails every sale.
-It takes `token_id` first and the address second.
-
-Xmarket and Xauction also accept collections shaped like ERC-721 through a standard-mode lane, which checks `owner_of` and `get_approved` instead.
-The owner enables it per collection.
-
-[`XNS1.aml`](./contracts/standard/XNS1.aml) is a complete reference implementation with burn, operators, a one-way provenance hash and circle resource pointers.
-It is not deployed and exists to be read and copied.
+The script requires `curl` and `jq`, needs no wallet and sends no transaction. Exit status 0 means every source matches.
+Every contract passes Octra's AML safety verifier with 0 errors; the full reports are in [`verification/`](./verification/).
+Checking a single contract by hand is described in [Verify a contract](https://docs.xpectrum.xyz/developers/verify).
 
 ## Repository layout
 
@@ -91,112 +56,21 @@ deployments.json
 scripts/verify.sh
 ```
 
-A source file is named for its contract and carries no version; the version lives in the certificate name, the source header and the changelog.
-Three contracts declare a different identifier from their filename, because the identifier is compiled into deployed bytecode and cannot change without a redeploy: `Xmarket.aml` declares `Xmarket_v3`, `Xauction.aml` declares `Xauction_v2` and `xpectra/Xlist.aml` declares `Xlist_v2`.
+Three contracts declare an identifier that differs from their filename, because the identifier is compiled into deployed bytecode: `Xmarket.aml` declares `Xmarket_v3`, `Xauction.aml` declares `Xauction_v2` and `xpectra/Xlist.aml` declares `Xlist_v2`.
 
-`launch/XuperFactory.aml` is the mainnet build.
-The factory embeds the compiled Xcollection as a constant, and the compiler produces different bytecode on devnet and mainnet for the same source, so a devnet build of the factory differs in that one constant.
+## Documentation
 
-## Verifying
-
-```sh
-scripts/verify.sh           # recompile every source and compare it with its certificate
-scripts/verify.sh --live    # also compare each deployed contract with the code running on chain
-```
-
-Requires `curl` and `jq`.
-Compilation is a free read on any Octra node and needs no wallet.
-Exit status 0 means every source matches.
-
-A single file can be checked by hand:
-
-```sh
-curl -s https://octra.network/rpc \
-  -H 'Content-Type: application/json' -H 'Origin: https://octra.network' -H 'User-Agent: Mozilla/5.0' \
-  -d "$(jq -Rs '{jsonrpc:"2.0",id:1,method:"octra_compileAml",params:[.,true]}' contracts/market/Xmarket.aml)" \
-  | jq -r .result.certificate.bytecode_hash
-# 943cbd42f67c2d704c1ec7b1f01facc1a59024a4ce79db7afc8686baeec60e66
-
-curl -s https://octra.network/rpc \
-  -H 'Content-Type: application/json' -H 'Origin: https://octra.network' -H 'User-Agent: Mozilla/5.0' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"vm_contract","params":["octGoeTjaF8MiKTP5ad5FJfWMCZmmEdnrfxTow6UUVmBj6h"]}' \
-  | jq -r .result.code_hash
-# 943cbd42f67c2d704c1ec7b1f01facc1a59024a4ce79db7afc8686baeec60e66
-```
-
-Mainnet refuses requests without browser headers and answers with an HTML error page instead of JSON, which is why both calls send `Origin` and `User-Agent`.
-
-Compare `bytecode_hash`, not `source_hash`.
-Comments do not change bytecode, so `source_hash` moves on a documentation edit while `bytecode_hash` stays fixed.
-
-### Verifier report
-
-Every contract passes Octra's AML safety verifier (`aml_safety_report_v1`) with 0 errors.
-The full report for each is in [`verification/`](./verification/).
-
-| Contract | Warnings | Flagged parameters |
-|---|---|---|
-| XuperFactory 4.0.0 | 2 | `create_collection.max_supply`, `set_launch_fee.fee` |
-| Xcollection 6.0.0 | 6 | `mint.quantity` and five `token_id` parameters |
-| Xlist 4.0.0 | 0 | |
-| Xmarket 3.2.0 | 0 | |
-| Xauction 5.0.0 | 6 | three bid `amount` parameters, three `auction_id` parameters |
-| Xdutch 2.0.0 | 1 | `reclaim.sale_id` |
-| Xenglish 1.0.0 | 1 | `bid.amount` |
-| XpectrumGenesis 1.0.1 | 4 | four `token_id` parameters |
-| Xlist 2.0.0 | 0 | |
-| Xincinerator 1.0.0 | 0 | |
-| XincineratorLog 1.0.0 | 2 | `burn_range.start_id`, `token_is_burned.token_id` |
-| XNS1 4.0.0 | 7 | `mint.royalty_bps` and six `token_id` parameters |
-
-Every warning is `unsigned_parameter_without_positive_guard`, which flags an unsigned parameter that could be zero in a function whose name suggests value moves.
-Each one has been checked against the code.
-Token, sale and auction ids start at 0, so zero is a valid id.
-`quantity` and `max_supply` are checked inside a helper or the collection constructor, which the verifier does not follow.
-Bid amounts are checked against the auction's minimum or the sealed commitment.
-A royalty or launch fee of zero is allowed on purpose.
-
-## Reading the source
-
-Every public function carries a block in Prism, Xpectrum's comment format. This is `Xdutch.open_sale`:
-`//|` lines are documentation; the compiler reads them as ordinary comments.
-
-```
-//| Lists a token and takes it into escrow.
-//| who      the token's owner, who has approved this contract for it
-//| holds    the token moves into this contract
-//| reveals  the seller, the token and every sale term
-//| logs     Listed(sale_id, seller, nft, token_id, start, floor)
-//| in       nft       collection address
-//| in       token_id  token
-//| in       start     opening price
-//| in       floor     lowest price
-//| in       step      price decrease per epoch
-//| in       duration  length in epochs
-//| in       gated     1 for allowlisted buyers only, which refuses everyone until add_allow loads the list
-//| out      sale id
-fn open_sale(nft: address, token_id: u128, start: u128, floor: u128, step: u128, duration: u128, gated: u128): u128
-```
-| Band | Meaning |
+| Topic | Page |
 |---|---|
-| `who` | who may call it |
-| `pays` | value attached or paid out |
-| `when` | the epoch window it works in |
-| `holds` | where the token goes |
-| `reveals` | what the call makes public on chain |
-| `logs` | the event written |
-| `in`, `out` | each parameter, and the return with its field order |
+| Architecture and how the contracts call each other | [Contracts overview](https://docs.xpectrum.xyz/contracts/overview) |
+| The token interface the market contracts read | [XNS-1](https://docs.xpectrum.xyz/standards/xns-1) |
+| Making a contract tradeable on Xpectrum | [Integrate](https://docs.xpectrum.xyz/developers/integrate) |
+| Version history and caller impact | [CHANGELOG.md](./CHANGELOG.md) |
 
-Each contract header states its custody, payout and privacy model in the same way.
-Amounts are in micro-OCT (1 OCT = 1,000,000) and time is in epochs throughout.
-
-## Changelog
-
-[CHANGELOG.md](./CHANGELOG.md) lists every version with its impact on callers.
-Contracts are immutable once deployed, so any change ships as a new deployment with a new version.
+Each public function is documented in the source with `//|` comment blocks stating who may call it, what it pays and holds, what it makes public, and its parameters and return value.
 
 ## License
 
-Contracts first published here under MIT remain MIT.
-Contracts whose header carries `SPDX-License-Identifier: FSL-1.1-MIT` are under the Functional Source License 1.1 with MIT as the future license, and each becomes MIT two years after it was published, on the date in its header.
+Contracts first published under MIT remain MIT.
+Contracts whose header carries `SPDX-License-Identifier: FSL-1.1-MIT` are under the Functional Source License 1.1 and become MIT two years after publication, on the date in each header.
 See [LICENSE](./LICENSE).
